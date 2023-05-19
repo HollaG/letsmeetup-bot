@@ -53,11 +53,14 @@ const listener = onSnapshot(collection(db, COLLECTION_NAME), {
                     bot.telegram
                         .sendMessage(
                             meetup.creator.id,
-                            generateMessageText(meetup)
+                            generateMessageText(meetup),
+                            {
+                                ...generateCreatorReplyMarkup(meetup),
+                            }
                         )
                         .then((msg) => {
                             const msgId = msg.message_id;
-                            console.log(change.doc.id, "---------");
+                            // console.log(change.doc.id, "---------");
                             // set notified to true
                             updateDoc(
                                 doc(
@@ -75,11 +78,12 @@ const listener = onSnapshot(collection(db, COLLECTION_NAME), {
                                     ],
                                 } as Meetup
                             );
+                            bot.telegram.pinChatMessage(msg.chat.id, msgId)
                         });
                 }
             }
             if (change.type === "modified") {
-                console.log("Modified: ", change.doc.data());
+                // console.log("Modified: ", change.doc.data());
                 const meetup = change.doc.data() as Meetup;
                 meetup.id = change.doc.id;
                 editMessages(meetup);
@@ -147,7 +151,7 @@ bot.on("inline_query", async (ctx) => {
             message_text: generateMessageText(doc),
             parse_mode: "HTML",
         },
-        ...generateSharedInlineReplyMarkup(doc.id!),
+        ...generateSharedInlineReplyMarkup(doc),
     }));
 
     await ctx.answerInlineQuery(markup, {
@@ -200,7 +204,7 @@ const editMessages = async (meetup: Meetup) => {
                     generateMessageText(meetup),
                     {
                         parse_mode: "HTML",
-                        ...generateSharedInlineReplyMarkup(meetup.id!),
+                        ...generateSharedInlineReplyMarkup(meetup),
                     }
                 );
             } else {
@@ -211,7 +215,7 @@ const editMessages = async (meetup: Meetup) => {
                     generateMessageText(meetup),
                     {
                         parse_mode: "HTML",
-                        ...generateSharedInlineReplyMarkup(meetup.id!),
+                        ...generateCreatorReplyMarkup(meetup),
                     }
                 );
             }
@@ -342,14 +346,14 @@ const generateMessageText = (meetup: Meetup) => {
     return msg;
 };
 
-const generateSharedInlineReplyMarkup = (meetupId: string) => {
+const generateSharedInlineReplyMarkup = (meetup: Meetup) => {
     return {
         reply_markup: {
             inline_keyboard: [
                 [
                     {
                         text: "Indicate availability",
-                        url: `https://t.me/${process.env.BOT_USERNAME}?start=indicate__${meetupId}`,
+                        url: `https://t.me/${process.env.BOT_USERNAME}?start=indicate__${meetup.id}`,
                     },
                 ],
             ],
@@ -357,19 +361,21 @@ const generateSharedInlineReplyMarkup = (meetupId: string) => {
     };
 };
 
-const generateCreatorReplyMarkup = (meetupId: string) => {
+const generateCreatorReplyMarkup = (meetup: Meetup) => {
     return {
         reply_markup: {
             inline_keyboard: [
                 [
                     {
-                        switch_inline_query: meetupId,
+                        switch_inline_query: meetup.title,
                         text: "Share meetup",
-                    },
+                    },                    
                     {
                         text: "Indicate availability",
-                        url: `https://t.me/${process.env.BOT_USERNAME}?start=indicate__${meetupId}`,
-                    },
+                        web_app: {
+                            url: `${BASE_URL}meetup/${meetup.id}`,
+                        }
+                    }
                 ],
             ],
         },
