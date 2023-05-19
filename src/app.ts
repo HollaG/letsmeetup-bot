@@ -11,6 +11,9 @@ import {
     doc,
     getDoc,
     Timestamp,
+    where,
+    query,
+    getDocs,
 } from "firebase/firestore";
 import { ITelegramUser, Meetup } from "./types";
 import { format } from "date-fns";
@@ -22,6 +25,7 @@ import {
     getTime,
     isSameAsPreviousTimeSlot,
 } from "./utils/dates";
+import { InlineQueryResult } from "telegraf/typings/core/types/typegram";
 // console.log(db);
 dotenv.config();
 
@@ -31,19 +35,25 @@ const bot: Telegraf<Context<Update>> = new Telegraf(
 
 const BASE_URL = `https://www.localtutreg:3000/#/`;
 
+// TODOs
+// Limit message text
+// show a specially formatted message when the limit is nearing
+// create a webpage where users can view the meetup read-only
+
 const listener = onSnapshot(collection(db, COLLECTION_NAME), {
     next: (querySnapshot) => {
         querySnapshot.docChanges().forEach((change) => {
             // only update if notified = false
             // then set notified = true
-            const data = change.doc.data() as Meetup;
+            const meetup = change.doc.data() as Meetup;
+            meetup.id = change.doc.id;
             if (change.type === "added") {
                 // console.log("New: ", change.doc.data());
-                if (!data.notified) {
+                if (!meetup.notified) {
                     bot.telegram
                         .sendMessage(
-                            data.creator.id,
-                            `New meetup created with id ${data.title} at ${data.date_created}`
+                            meetup.creator.id,
+                            generateMessageText(meetup)
                         )
                         .then((msg) => {
                             const msgId = msg.message_id;
@@ -55,7 +65,7 @@ const listener = onSnapshot(collection(db, COLLECTION_NAME), {
                                     change.doc.id
                                 ),
                                 {
-                                    ...data,
+                                    ...meetup,
                                     notified: true,
                                     messages: [
                                         {
@@ -72,7 +82,7 @@ const listener = onSnapshot(collection(db, COLLECTION_NAME), {
                 console.log("Modified: ", change.doc.data());
                 const meetup = change.doc.data() as Meetup;
                 meetup.id = change.doc.id;
-                editMessages(change.doc.data() as Meetup);
+                editMessages(meetup);
             }
             // if (change.type === "removed") {
             //     console.log("Removed: ", change.doc.data());
@@ -82,12 +92,9 @@ const listener = onSnapshot(collection(db, COLLECTION_NAME), {
 });
 
 bot.start(async (ctx) => {
-    console.log(ctx.message.from);
     createUserIfNotExists(ctx.message.from);
     if (ctx.startPayload.startsWith("indicate__")) {
         const meetupId = ctx.startPayload.split("__")[1];
-        console.log(`${BASE_URL}meetup/${meetupId}`);
-
         ctx.reply(
             `Please click the button below to indicate your avaiailbilty.`,
             {
@@ -109,52 +116,44 @@ bot.start(async (ctx) => {
 });
 
 bot.on("inline_query", async (ctx) => {
-    const query = ctx.inlineQuery.query;
-    if (!query.includes("_")) return;
-    const type = query.split("_")[0];
-    const meetupId = query.split("_")[1];
-
-    if (type == "share") {
-        // find a document where docId = meetupId and creatorId = senderId
-        const meetupRef = doc(db, COLLECTION_NAME, meetupId);
-        const querySnapshot = await getDoc(meetupRef);
-        const data = querySnapshot.data() as Meetup;
-        if (!data) {
-            return; // todo: handle error
-        } else {
-            const msgId = await ctx.answerInlineQuery(
-                [
-                    {
-                        type: "article",
-                        id: meetupId,
-                        title: data.title,
-                        input_message_content: {
-                            message_text: `Title: ${data.title}\nDescription: ${
-                                data.description
-                            }\nDate: ${(
-                                data.date_created as unknown as Timestamp
-                            ).toDate()}\nCreator: @${data.creator.username}`,
-                        },
-                        reply_markup: {
-                            inline_keyboard: [
-                                [
-                                    {
-                                        text: "Indicate availability",
-                                        url: `https://t.me/${process.env.BOT_USERNAME}?start=indicate__${meetupId}`,
-                                    },
-                                ],
-                            ],
-                        },
-                    },
-                ],
-                {
-                    cache_time: 0,
-                }
-            );
-
-            console.log({ msgId });
-        }
+    const searchQuery = ctx.inlineQuery.query;
+    let searchStr = "";
+    if (!searchQuery.includes("_")) {
+        searchStr = searchQuery.trim().toLocaleLowerCase();
     }
+    const type = searchQuery.split("_")[0];
+    const meetupId = searchQuery.split("_")[1];
+
+    const userMeetupsRef = collection(db, COLLECTION_NAME);
+    const q = query(userMeetupsRef, where("creator.id", "==", ctx.from.id));
+    const querySnapshot = await getDocs(q);
+
+    let foundDocs: Meetup[] = [];
+    querySnapshot.forEach((doc) => {
+        // check if doc title contains the search string
+        const data = doc.data() as Meetup;
+        data.id = doc.id;
+        const docTitle = data.title.trim().toLocaleLowerCase();
+        if (docTitle.includes(searchStr)) {
+            foundDocs.push(data);
+        }
+    });
+
+    const markup: InlineQueryResult[] = foundDocs.map((doc) => ({
+        type: "article",
+        id: doc.id!,
+        title: doc.title,
+        input_message_content: {
+            message_text: generateMessageText(doc),
+            parse_mode: "HTML",
+        },
+        ...generateSharedInlineReplyMarkup(doc.id!),
+    }));
+
+    await ctx.answerInlineQuery(markup, {
+        cache_time: 0,
+    });
+    
 });
 
 /* Listen for when the user chooses a result from the inline query to share a chain */
@@ -286,32 +285,49 @@ const generateMessageText = (meetup: Meetup) => {
         }
 
         for (let date in newMap) {
-            msg += `<b>${format(dateParser(date), "EEEE, d MMMM yyyy")}</b>\n`;
+            msg += `<b><u>${format(
+                dateParser(date),
+                "EEEE, d MMMM yyyy"
+            )}</u></b>\n`;
 
-            for (let dateTimeStr in newMap[date]) {
-                if (isSameAsPreviousTimeSlot(dateTimeStr, meetup)) {
-                    // ignore
-                    continue;
-                }
-                const startTime = getTime(dateTimeStr);
-                const numOfConsecutiveSlots =
-                    getNumberOfConsectiveSelectedTimeSlots(dateTimeStr, meetup);
+            if (newMap[date]) {
+                // if we iterate according to the natural iteration, it uses ascii sorting (1000 comes before 999 for e.g)
+                const dateTimeKeys = Object.keys(newMap[date])
+                    .map(getTime)
+                    .sort((a, b) => a - b)
+                    .map((e) => `${e}::${date}`);
 
-                const endTime = startTime + numOfConsecutiveSlots.length * 30;
+                for (let dateTimeStr of dateTimeKeys) {
+                    if (isSameAsPreviousTimeSlot(dateTimeStr, meetup)) {
+                        // ignore
+                        continue;
+                    }
+                    const startTime = getTime(dateTimeStr);
+                    const numOfConsecutiveSlots =
+                        getNumberOfConsectiveSelectedTimeSlots(
+                            dateTimeStr,
+                            meetup
+                        );
 
-                const numFreeThisDate = newMap[date][dateTimeStr].length;
-                const percent = Math.round(
-                    (numFreeThisDate / numResponded) * 100
-                );
-                msg += `<b>${convertTimeIntoAMPM(
-                    startTime
-                )} - ${convertTimeIntoAMPM(endTime)} (${
-                    newMap[date][dateTimeStr].length
-                } / ${numResponded}, ${percent}%)</b>\n`;
+                    // just trust me on the + 1
+                    const endTime =
+                        startTime + (numOfConsecutiveSlots.length + 1) * 30;
 
-                for (let i in newMap[date][dateTimeStr]) {
-                    const person = newMap[date][dateTimeStr][i];
-                    msg += `${i + 1}. @${person.username}\n`; // TODO: change this to first_name
+                    const numFreeThisDate = newMap[date][dateTimeStr].length;
+                    const percent = Math.round(
+                        (numFreeThisDate / numResponded) * 100
+                    );
+                    msg += `<b>${convertTimeIntoAMPM(
+                        startTime
+                    )} - ${convertTimeIntoAMPM(endTime)} (${
+                        newMap[date][dateTimeStr].length
+                    } / ${numResponded}, ${percent}%)</b>\n`;
+
+                    for (let i in newMap[date][dateTimeStr]) {
+                        const person = newMap[date][dateTimeStr][i];
+                        msg += `${Number(i) + 1}. @${person.username}\n`; // TODO: change this to first_name
+                    }
+                    msg += "\n";
                 }
             }
         }
@@ -331,6 +347,25 @@ const generateSharedInlineReplyMarkup = (meetupId: string) => {
         reply_markup: {
             inline_keyboard: [
                 [
+                    {
+                        text: "Indicate availability",
+                        url: `https://t.me/${process.env.BOT_USERNAME}?start=indicate__${meetupId}`,
+                    },
+                ],
+            ],
+        },
+    };
+};
+
+const generateCreatorReplyMarkup = (meetupId: string) => {
+    return {
+        reply_markup: {
+            inline_keyboard: [
+                [
+                    {
+                        switch_inline_query: meetupId,
+                        text: "Share meetup",
+                    },
                     {
                         text: "Indicate availability",
                         url: `https://t.me/${process.env.BOT_USERNAME}?start=indicate__${meetupId}`,
