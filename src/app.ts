@@ -14,6 +14,7 @@ import {
     where,
     query,
     getDocs,
+    orderBy,
 } from "firebase/firestore";
 import { ITelegramUser, Meetup } from "./types";
 import { format } from "date-fns";
@@ -129,9 +130,14 @@ bot.on("inline_query", async (ctx) => {
     const meetupId = searchQuery.split("_")[1];
 
     const userMeetupsRef = collection(db, COLLECTION_NAME);
-    const q = query(userMeetupsRef, where("creator.id", "==", ctx.from.id));
+    const q = query(
+        userMeetupsRef,
+        where("creator.id", "==", ctx.from.id),
+        orderBy("date_created", "desc")
+    );
     const querySnapshot = await getDocs(q);
 
+    // console.log(querySnapshot)
     let foundDocs: Meetup[] = [];
     querySnapshot.forEach((doc) => {
         // check if doc title contains the search string
@@ -143,22 +149,16 @@ bot.on("inline_query", async (ctx) => {
         }
     });
 
-    const markup: InlineQueryResult[] = foundDocs
-        .sort(
-            (a, b) =>
-            new Date(b.date_created).getTime() -
-                new Date(a.date_created).getTime() 
-        )
-        .map((doc) => ({
-            type: "article",
-            id: doc.id!,
-            title: doc.title,
-            input_message_content: {
-                message_text: generateMessageText(doc),
-                parse_mode: "HTML",
-            },
-            ...generateSharedInlineReplyMarkup(doc),
-        }));
+    const markup: InlineQueryResult[] = foundDocs.map((doc) => ({
+        type: "article",
+        id: doc.id!,
+        title: doc.title,
+        input_message_content: {
+            message_text: generateMessageText(doc),
+            parse_mode: "HTML",
+        },
+        ...generateSharedInlineReplyMarkup(doc),
+    }));
 
     await ctx.answerInlineQuery(markup, {
         cache_time: 0,
@@ -293,7 +293,10 @@ const generateMessageText = (meetup: Meetup) => {
             }
         }
 
-        for (let date in newMap) {
+        // Sort by date
+        const ordered = Object.keys(newMap).sort()
+
+        for (let date of ordered) {            
             msg += `<b><u>${format(
                 dateParser(date),
                 "EEEE, d MMMM yyyy"
