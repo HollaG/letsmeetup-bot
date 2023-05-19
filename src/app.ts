@@ -78,7 +78,7 @@ const listener = onSnapshot(collection(db, COLLECTION_NAME), {
                                     ],
                                 } as Meetup
                             );
-                            bot.telegram.pinChatMessage(msg.chat.id, msgId)
+                            bot.telegram.pinChatMessage(msg.chat.id, msgId);
                         });
                 }
             }
@@ -143,21 +143,26 @@ bot.on("inline_query", async (ctx) => {
         }
     });
 
-    const markup: InlineQueryResult[] = foundDocs.map((doc) => ({
-        type: "article",
-        id: doc.id!,
-        title: doc.title,
-        input_message_content: {
-            message_text: generateMessageText(doc),
-            parse_mode: "HTML",
-        },
-        ...generateSharedInlineReplyMarkup(doc),
-    }));
+    const markup: InlineQueryResult[] = foundDocs
+        .sort(
+            (a, b) =>
+            new Date(b.date_created).getTime() -
+                new Date(a.date_created).getTime() 
+        )
+        .map((doc) => ({
+            type: "article",
+            id: doc.id!,
+            title: doc.title,
+            input_message_content: {
+                message_text: generateMessageText(doc),
+                parse_mode: "HTML",
+            },
+            ...generateSharedInlineReplyMarkup(doc),
+        }));
 
     await ctx.answerInlineQuery(markup, {
         cache_time: 0,
     });
-    
 });
 
 /* Listen for when the user chooses a result from the inline query to share a chain */
@@ -369,13 +374,13 @@ const generateCreatorReplyMarkup = (meetup: Meetup) => {
                     {
                         switch_inline_query: meetup.title,
                         text: "Share meetup",
-                    },                    
+                    },
                     {
                         text: "Indicate availability",
                         web_app: {
                             url: `${BASE_URL}meetup/${meetup.id}`,
-                        }
-                    }
+                        },
+                    },
                 ],
             ],
         },
