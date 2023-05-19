@@ -33,7 +33,7 @@ const bot: Telegraf<Context<Update>> = new Telegraf(
     process.env.BOT_TOKEN as string
 );
 
-const BASE_URL = `https://www.localtutreg:3000/#/`;
+const BASE_URL = process.env.BASE_URL;
 
 // TODOs
 // Limit message text
