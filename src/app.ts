@@ -251,7 +251,8 @@ const generateMessageText = (meetup: Meetup) => {
     msg += `Responded: ${numResponded}\n\n`;
 
     if (meetup.isFullDay) {
-        for (let date in meetup.selectionMap) {
+        const dates = Object.keys(meetup.selectionMap).sort()
+        for (let date of dates) {
             const people = meetup.selectionMap[date];
             msg += `<b>${format(dateParser(date), "EEEE, d MMMM yyyy")}</b>\n`;
             for (let i in people) {
