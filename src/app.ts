@@ -250,6 +250,8 @@ const generateMessageText = (meetup: Meetup) => {
 
     msg += `Responded: ${numResponded}\n\n`;
 
+    let defaultMsg = msg;
+
     if (meetup.isFullDay) {
         const dates = Object.keys(meetup.selectionMap).sort()
         for (let date of dates) {
@@ -338,7 +340,7 @@ const generateMessageText = (meetup: Meetup) => {
 
                     for (let i in newMap[date][dateTimeStr]) {
                         const person = newMap[date][dateTimeStr][i];
-                        msg += `${Number(i) + 1}. @${person.username}\n`; // TODO: change this to first_name
+                        msg += `${Number(i) + 1}. <a href="t.me/${person.id}">${person.first_name}</a>\n`; // TODO: change this to first_name
                     }
                     msg += "\n";
                 }
@@ -348,10 +350,15 @@ const generateMessageText = (meetup: Meetup) => {
         msg += "\n";
     }
 
-    msg += `Created on ${format(
+    let footer = `Created on ${format(
         (meetup.date_created as unknown as Timestamp).toDate(),
-        "dd MMM yyyy hh:mm aaa"
-    )}\n`;
+        "dd MMM yyyy h:mm aaa"
+    )} by <a href='t.me/${meetup.creator.id}'>${meetup.creator.first_name}</a>\n`;
+
+    msg += footer
+    if (msg.length > 3000) {
+        return defaultMsg + "❗️ Please view the meetup details by clicking the button below.\n\n" + footer
+    }
     return msg;
 };
 
@@ -360,6 +367,10 @@ const generateSharedInlineReplyMarkup = (meetup: Meetup) => {
         reply_markup: {
             inline_keyboard: [
                 [
+                    {
+                        text: "View meetup details",
+                        url: `${BASE_URL}meetup/${meetup.id}`,
+                    },
                     {
                         text: "Indicate availability",
                         url: `https://t.me/${process.env.BOT_USERNAME}?start=indicate__${meetup.id}`,
