@@ -27,6 +27,13 @@ import {
     isSameAsPreviousTimeSlot,
 } from "./utils/dates";
 import { InlineQueryResult } from "telegraf/typings/core/types/typegram";
+
+import sanitizeHtml from "sanitize-html";
+const sanitizeOptions = {
+    allowedTags: [],
+    allowedAttributes: {},
+};
+
 // console.log(db);
 dotenv.config();
 
@@ -117,7 +124,21 @@ bot.start(async (ctx) => {
                 },
             }
         );
-    } else ctx.reply("Hello! Click the button below to create a new meetup");
+    } else
+        ctx.reply("Hello! Click the button below to create a new meetup", {
+            reply_markup: {
+                inline_keyboard: [
+                    [
+                        {
+                            text: "Create a meetup",
+                            web_app: {
+                                url: `${BASE_URL}create`,
+                            },
+                        },
+                    ],
+                ],
+            },
+        });
 });
 
 bot.on("inline_query", async (ctx) => {
@@ -238,7 +259,20 @@ const editMessages = async (meetup: Meetup) => {
  * @returns
  */
 const generateMessageText = (meetup: Meetup) => {
-    let msg = `<b><u>${meetup.title}</u></b>\n${meetup.description}\n\n`;
+    // sanitize title and descp
+    // title at most 256 chars
+    // description at most 1024 chars
+    const title = sanitizeHtml(meetup.title.trim(), sanitizeOptions).slice(
+        0,
+        256
+    );
+    const description = sanitizeHtml(
+        meetup.description?.trim() || "",
+        sanitizeOptions
+    ).slice(0, 1024);
+    let msg = `<b><u>${title}</u></b>\n`;
+    if (description) msg += `${meetup.description}\n`;
+    msg += "\n";
 
     const numResponded = meetup.users.length;
 
@@ -253,31 +287,20 @@ const generateMessageText = (meetup: Meetup) => {
     let defaultMsg = msg;
 
     if (meetup.isFullDay) {
-        const dates = Object.keys(meetup.selectionMap).sort()
+        const dates = Object.keys(meetup.selectionMap).sort();
         for (let date of dates) {
             const people = meetup.selectionMap[date];
             msg += `<b>${format(dateParser(date), "EEEE, d MMMM yyyy")}</b>\n`;
             for (let i in people) {
                 const person = people[i];
-                msg += `${i + 1}. @${person.username}\n`; // TODO: change this to first_name
+                msg += `${i + 1}. <a href="t.me/${person.id}">${
+                    person.first_name
+                }</a>\n`; // TODO: change this to first_name
             }
             msg += "\n";
         }
     } else {
         // preformat: for each day, check if there is at least one person who is available
-        const dates = meetup.dates.filter((date) => {
-            // return false if there is no one available on that day
-            let atLeastOne = false;
-            for (let dateTimeStr in meetup.selectionMap) {
-                if (dateTimeStr.includes(date)) {
-                    if (meetup.selectionMap[dateTimeStr].length > 0) {
-                        atLeastOne = true;
-                        break;
-                    }
-                }
-            }
-            return atLeastOne;
-        });
 
         // split selectionMap into a Map containing key=date, value=times for that day
         const newMap: {
@@ -297,9 +320,9 @@ const generateMessageText = (meetup: Meetup) => {
         }
 
         // Sort by date
-        const ordered = Object.keys(newMap).sort()
+        const ordered = Object.keys(newMap).sort();
 
-        for (let date of ordered) {            
+        for (let date of ordered) {
             msg += `<b><u>${format(
                 dateParser(date),
                 "EEEE, d MMMM yyyy"
@@ -340,7 +363,9 @@ const generateMessageText = (meetup: Meetup) => {
 
                     for (let i in newMap[date][dateTimeStr]) {
                         const person = newMap[date][dateTimeStr][i];
-                        msg += `${Number(i) + 1}. <a href="t.me/${person.id}">${person.first_name}</a>\n`; // TODO: change this to first_name
+                        msg += `${Number(i) + 1}. <a href="t.me/${person.id}">${
+                            person.first_name
+                        }</a>\n`; // TODO: change this to first_name
                     }
                     msg += "\n";
                 }
@@ -350,14 +375,36 @@ const generateMessageText = (meetup: Meetup) => {
         msg += "\n";
     }
 
+    const usersWithComments = meetup.users.filter((u) => u.comments.length);
+    if (usersWithComments.length) {
+        msg += `<b><u>Comments (${usersWithComments.length})</u></b>\n`;
+        // there is at least one comment
+        for (let userObj of usersWithComments) {
+            const user = userObj.user;
+
+            // max 512 chars
+            const comment = sanitizeHtml(
+                userObj.comments.trim(),
+                sanitizeOptions
+            ).slice(0, 512);
+            msg += `<a href="t.me/${user.id}"><b>${user.first_name}</b></a>\n${comment}\n\n`;
+        }
+    }
+
     let footer = `Created on ${format(
         (meetup.date_created as unknown as Timestamp).toDate(),
         "dd MMM yyyy h:mm aaa"
-    )} by <a href='t.me/${meetup.creator.id}'>${meetup.creator.first_name}</a>\n`;
+    )} by <a href='t.me/${meetup.creator.id}'>${
+        meetup.creator.first_name
+    }</a>\n`;
 
-    msg += footer
+    msg += footer;
     if (msg.length > 3000) {
-        return defaultMsg + "❗️ Please view the meetup details by clicking the button below.\n\n" + footer
+        return (
+            defaultMsg +
+            "❗️ Please view the meetup details by clicking the button below.\n\n" +
+            footer
+        );
     }
     return msg;
 };
