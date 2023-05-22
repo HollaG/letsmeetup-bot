@@ -2,14 +2,14 @@ import { User } from "telegraf/typings/core/types/typegram";
 
 export type Meetup = {
     id?: string;
-    creator: ITelegramUser
+    creator: ITelegramUser;
     isFullDay: boolean;
     timeslots: string[];
     dates: string[];
     users: {
         comments: string;
         selected: string[];
-        user: ITelegramUser
+        user: ITelegramUser;
     }[];
     date_created: Date;
     title: string;
@@ -25,11 +25,11 @@ export type Meetup = {
     selectionMap: {
         [dateOrTimeStr: string]: ITelegramUser[];
     };
+    isEnded: boolean;
 };
 
-
 // types.ts
-export type ITelegramUser = User
+export type ITelegramUser = User;
 export interface IWebApp {
     initData: string;
     initDataUnsafe: {
@@ -79,5 +79,3 @@ export interface IWebApp {
     close: () => void;
     switchInlineQuery: (query: string, choose_chat_types: string[]) => void;
 }
-
-

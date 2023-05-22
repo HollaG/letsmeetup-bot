@@ -15,9 +15,10 @@ import {
     query,
     getDocs,
     orderBy,
+    deleteDoc,
 } from "firebase/firestore";
 import { ITelegramUser, Meetup } from "./types";
-import { format } from "date-fns";
+import { addMonths, format, isAfter, isBefore, subMonths } from "date-fns";
 import {
     convertTimeIntoAMPM,
     dateParser,
@@ -26,7 +27,12 @@ import {
     getTime,
     isSameAsPreviousTimeSlot,
 } from "./utils/dates";
-import { InlineQueryResult } from "telegraf/typings/core/types/typegram";
+import {
+    InlineQueryResult,
+    InlineQueryResultArticle,
+} from "telegraf/typings/core/types/typegram";
+
+import { CronJob } from "cron";
 
 import sanitizeHtml from "sanitize-html";
 const sanitizeOptions = {
@@ -97,9 +103,15 @@ const listener = onSnapshot(collection(db, COLLECTION_NAME), {
                 meetup.id = change.doc.id;
                 editMessages(meetup);
             }
-            // if (change.type === "removed") {
-            //     console.log("Removed: ", change.doc.data());
-            // }
+            if (change.type === "removed") {
+                console.log("Removed: ", change.doc.data());
+                const meetup = change.doc.data() as Meetup;
+                meetup.id = change.doc.id;
+                editMessagesToMarkDeleted(
+                    meetup,
+                    `Your meetup has been deleted!`
+                );
+            }
         });
     },
 });
@@ -172,17 +184,20 @@ bot.on("inline_query", async (ctx) => {
         }
     });
 
-    const markup: InlineQueryResult[] = foundDocs.map((doc) => ({
-        type: "article",
-        id: doc.id!,
-        title: doc.title,
-        input_message_content: {
-            message_text: generateMessageText(doc),
-            parse_mode: "HTML",
-            disable_web_page_preview: true,
-        },
-        ...generateSharedInlineReplyMarkup(doc),
-    }));
+    // limit to 45
+    const markup: InlineQueryResultArticle[] = foundDocs
+        .map((doc) => ({
+            type: "article",
+            id: doc.id!,
+            title: doc.title,
+            input_message_content: {
+                message_text: generateMessageText(doc),
+                parse_mode: "HTML",
+                disable_web_page_preview: true,
+            },
+            ...generateSharedInlineReplyMarkup(doc),
+        }))
+        .slice(0, 45) as InlineQueryResultArticle[];
 
     await ctx.answerInlineQuery(markup, {
         cache_time: 0,
@@ -209,6 +224,20 @@ bot.on("chosen_inline_result", async (ctx) => {
         });
     } catch (e) {
         console.log("Error: ", e);
+    }
+});
+
+bot.on("callback_query", (ctx) => {
+    // @ts-ignore
+    const cbData = ctx.callbackQuery.data;
+
+    if (cbData.startsWith("end__")) {
+        const id = cbData.replace("end__", "");
+        const docRef = doc(db, COLLECTION_NAME, id);
+        updateDoc(docRef, {
+            isEnded: true,
+        });
+        // deleteDoc(docRef);
     }
 });
 
@@ -258,6 +287,53 @@ const editMessages = async (meetup: Meetup) => {
 };
 
 /**
+ * On every update from the snapshot listener, update the corresponding telegram chats.
+ * Debounce this so we only update once every 5 seconds.
+ *
+ * @param meetup The meetup that got deleted
+ */
+const editMessagesToMarkDeleted = async (meetup: Meetup, reason: string) => {
+    const messages = meetup.messages;
+    if (!messages) return;
+    for (let message of messages) {
+        try {
+            if (message.inline_message_id) {
+                await bot.telegram.editMessageText(
+                    undefined,
+                    undefined,
+                    message.inline_message_id,
+                    `<b><u>❗️ ${reason}</u></b>\n\n${generateMessageText(
+                        meetup
+                    )}`,
+                    {
+                        parse_mode: "HTML",
+
+                        disable_web_page_preview: true,
+                    }
+                );
+            } else {
+                await bot.telegram.editMessageText(
+                    message.chat_id,
+                    message.message_id,
+                    undefined,
+                    `<b><u>❗️ ${reason}</u></b>\n\n${generateMessageText(
+                        meetup
+                    )}`,
+                    {
+                        parse_mode: "HTML",
+
+                        disable_web_page_preview: true,
+                    }
+                );
+            }
+        } catch (e) {
+            // potentailly the message content is the same. Just ignore that error
+            console.log(e);
+        }
+    }
+};
+
+/**
  * Generates the message text that is sent to people when sharing the meetup
  *
  * @param meetup The meetup to generate the message text for
@@ -275,7 +351,11 @@ const generateMessageText = (meetup: Meetup) => {
         meetup.description?.trim() || "",
         sanitizeOptions
     ).slice(0, 1024);
-    let msg = `<b><u>${title}</u></b>\n`;
+    let msg = ``;
+
+    if (meetup.isEnded)
+        msg += `<b><u>❗️ This meetup has ended ❗️</u></b>\n\n`;
+    msg += `<b><u>${title}</u></b>\n`;
     if (description) msg += `${meetup.description}\n`;
     msg += "\n";
 
@@ -415,25 +495,40 @@ const generateMessageText = (meetup: Meetup) => {
 };
 
 const generateSharedInlineReplyMarkup = (meetup: Meetup) => {
+    const res = [
+        {
+            text: "View meetup details",
+            url: `${BASE_URL}meetup/${meetup.id}`,
+        },
+    ];
+    if (!meetup.isEnded) {
+        res.push({
+            text: "Indicate availability",
+            url: `https://t.me/${process.env.BOT_USERNAME}?start=indicate__${meetup.id}`,
+        });
+    }
     return {
         reply_markup: {
-            inline_keyboard: [
-                [
-                    {
-                        text: "View meetup details",
-                        url: `${BASE_URL}meetup/${meetup.id}`,
-                    },
-                    {
-                        text: "Indicate availability",
-                        url: `https://t.me/${process.env.BOT_USERNAME}?start=indicate__${meetup.id}`,
-                    },
-                ],
-            ],
+            inline_keyboard: [res],
         },
     };
 };
 
 const generateCreatorReplyMarkup = (meetup: Meetup) => {
+    if (meetup.isEnded) {
+        return {
+            reply_markup: {
+                inline_keyboard: [
+                    [
+                        {
+                            text: "View meetup details",
+                            url: `${BASE_URL}meetup/${meetup.id}`,
+                        },
+                    ],
+                ],
+            },
+        };
+    }
     return {
         reply_markup: {
             inline_keyboard: [
@@ -449,10 +544,46 @@ const generateCreatorReplyMarkup = (meetup: Meetup) => {
                         },
                     },
                 ],
+                [
+                    {
+                        text: "End meetup",
+                        callback_data: `end__${meetup.id}`,
+                    },
+                ],
             ],
         },
     };
 };
+
+const cleanup = async () => {
+    const data = query(collection(db, COLLECTION_NAME));
+    const qs = await getDocs(data);
+    qs.forEach((doc) => {
+        const d = doc.data() as Meetup;
+        // if (isAfter((d.date_created as unknown as Timestamp).toDate(), addMonths(new Date(), 3)))
+        // if the doc's date_created is more than 3 months ago, delete it
+        if (
+            isBefore(
+                (d.date_created as unknown as Timestamp).toDate(),
+                subMonths(new Date(), 3)
+            )
+        ) {
+            deleteDoc(doc.ref);
+            console.log("found doc that's expired");
+        }
+    });
+};
+
+// clear stale data every day
+const job = new CronJob("0 0 0 * * *", async () => {
+    // clear data
+    cleanup()
+        .then(() => console.log("Clean up done!"))
+        .catch(console.log);
+});
+
+job.start();
+cleanup();
 
 // Enable graceful stop
 process.once("SIGINT", () => {
