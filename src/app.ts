@@ -64,6 +64,7 @@ const listener = onSnapshot(collection(db, COLLECTION_NAME), {
                             generateMessageText(meetup),
                             {
                                 ...generateCreatorReplyMarkup(meetup),
+                                disable_web_page_preview: true,
                             }
                         )
                         .then((msg) => {
@@ -122,6 +123,7 @@ bot.start(async (ctx) => {
                         ],
                     ],
                 },
+                disable_web_page_preview: true,
             }
         );
     } else
@@ -177,6 +179,7 @@ bot.on("inline_query", async (ctx) => {
         input_message_content: {
             message_text: generateMessageText(doc),
             parse_mode: "HTML",
+            disable_web_page_preview: true,
         },
         ...generateSharedInlineReplyMarkup(doc),
     }));
@@ -231,6 +234,7 @@ const editMessages = async (meetup: Meetup) => {
                     {
                         parse_mode: "HTML",
                         ...generateSharedInlineReplyMarkup(meetup),
+                        disable_web_page_preview: true,
                     }
                 );
             } else {
@@ -242,6 +246,7 @@ const editMessages = async (meetup: Meetup) => {
                     {
                         parse_mode: "HTML",
                         ...generateCreatorReplyMarkup(meetup),
+                        disable_web_page_preview: true,
                     }
                 );
             }
@@ -293,7 +298,7 @@ const generateMessageText = (meetup: Meetup) => {
             msg += `<b>${format(dateParser(date), "EEEE, d MMMM yyyy")}</b>\n`;
             for (let i in people) {
                 const person = people[i];
-                msg += `${i + 1}. <a href="t.me/${person.id}">${
+                msg += `${Number(i) + 1}. <a href="t.me/${person.username}">${
                     person.first_name
                 }</a>\n`; // TODO: change this to first_name
             }
@@ -363,9 +368,9 @@ const generateMessageText = (meetup: Meetup) => {
 
                     for (let i in newMap[date][dateTimeStr]) {
                         const person = newMap[date][dateTimeStr][i];
-                        msg += `${Number(i) + 1}. <a href="t.me/${person.id}">${
-                            person.first_name
-                        }</a>\n`; // TODO: change this to first_name
+                        msg += `${Number(i) + 1}. <a href="t.me/${
+                            person.username
+                        }">${person.first_name}</a>\n`; // TODO: change this to first_name
                     }
                     msg += "\n";
                 }
@@ -387,14 +392,14 @@ const generateMessageText = (meetup: Meetup) => {
                 userObj.comments.trim(),
                 sanitizeOptions
             ).slice(0, 512);
-            msg += `<a href="t.me/${user.id}"><b>${user.first_name}</b></a>\n${comment}\n\n`;
+            msg += `<a href="t.me/${user.username}"><b>${user.first_name}</b></a>\n${comment}\n\n`;
         }
     }
 
     let footer = `Created on ${format(
         (meetup.date_created as unknown as Timestamp).toDate(),
         "dd MMM yyyy h:mm aaa"
-    )} by <a href='t.me/${meetup.creator.id}'>${
+    )} by <a href='t.me/${meetup.creator.username}'>${
         meetup.creator.first_name
     }</a>\n`;
 
