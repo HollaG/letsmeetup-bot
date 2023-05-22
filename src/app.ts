@@ -121,7 +121,7 @@ bot.start(async (ctx) => {
     if (ctx.startPayload.startsWith("indicate__")) {
         const meetupId = ctx.startPayload.split("__")[1];
         ctx.reply(
-            `Please click the button below to indicate your avaiailbilty.`,
+            `Please click the button below to indicate your availability.`,
             {
                 reply_markup: {
                     inline_keyboard: [
