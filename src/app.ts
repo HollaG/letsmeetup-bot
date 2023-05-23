@@ -27,6 +27,8 @@ import {
     getTime,
     isSameAsPreviousTimeSlot,
 } from "./utils/dates";
+
+import { generateProgressBar } from "./utils/functions";
 import {
     InlineQueryResult,
     InlineQueryResultArticle,
@@ -376,6 +378,8 @@ const generateMessageText = (meetup: Meetup) => {
         for (let date of dates) {
             const people = meetup.selectionMap[date];
             msg += `<b>${format(dateParser(date), "EEEE, d MMMM yyyy")}</b>\n`;
+            const percent = (people.length / numResponded) * 100;
+            msg += `${generateProgressBar(percent)}\n`;
             for (let i in people) {
                 const person = people[i];
                 msg += `${Number(i) + 1}. <a href="t.me/${person.username}">${
@@ -442,9 +446,8 @@ const generateMessageText = (meetup: Meetup) => {
                     );
                     msg += `<b>${convertTimeIntoAMPM(
                         startTime
-                    )} - ${convertTimeIntoAMPM(endTime)} (${
-                        newMap[date][dateTimeStr].length
-                    } / ${numResponded}, ${percent}%)</b>\n`;
+                    )} - ${convertTimeIntoAMPM(endTime)}</b>\n`;
+                    msg += `${generateProgressBar(percent)}\n`;
 
                     for (let i in newMap[date][dateTimeStr]) {
                         const person = newMap[date][dateTimeStr][i];
@@ -475,6 +478,12 @@ const generateMessageText = (meetup: Meetup) => {
             msg += `<a href="t.me/${user.username}"><b>${user.first_name}</b></a>\n${comment}\n\n`;
         }
     }
+
+    // msg += `https://t.me/letsmeetupbot/meetup\n\n`;
+    // msg += `<a href='https://t.me/letsmeetupbot/meetup'>Meetup link </a>\n\n`;
+    // msg += `https://t.me/letsmeetupbot/meetup?startapp=indicate__${meetup.id}\n\n`;`
+
+    msg += `<i>Click <a href='https://t.me/letsmeetupbot/meetup'>here</a> to create your own meetup!</i>\n\n`;
 
     let footer = `Created on ${format(
         (meetup.date_created as unknown as Timestamp).toDate(),
@@ -509,7 +518,15 @@ const generateSharedInlineReplyMarkup = (meetup: Meetup) => {
     }
     return {
         reply_markup: {
-            inline_keyboard: [res],
+            inline_keyboard: [
+                res,
+                // [
+                //     {
+                //         text: "test button",
+                //         url: `https://t.me/letsmeetupbot/meetup?startapp=indicate__${meetup.id}`,
+                //     },
+                // ],
+            ],
         },
     };
 };
