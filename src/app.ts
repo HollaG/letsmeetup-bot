@@ -69,7 +69,7 @@ const listener = onSnapshot(collection(db, COLLECTION_NAME), {
                     bot.telegram
                         .sendMessage(
                             meetup.creator.id,
-                            generateMessageText(meetup),
+                            generateMessageText(meetup, true),
                             {
                                 ...generateCreatorReplyMarkup(meetup),
                                 disable_web_page_preview: true,
@@ -166,6 +166,14 @@ bot.on("inline_query", async (ctx) => {
     const type = searchQuery.split("_")[0];
     const meetupId = searchQuery.split("_")[1];
 
+    if (searchQuery.trim().length < 2) {
+        return await ctx.answerInlineQuery([], {
+            // cache_time: 0,
+            switch_pm_parameter: "inline",
+            switch_pm_text: "Create a new meetup",
+        });
+    }
+
     const userMeetupsRef = collection(db, COLLECTION_NAME);
     const q = query(
         userMeetupsRef,
@@ -203,6 +211,8 @@ bot.on("inline_query", async (ctx) => {
 
     await ctx.answerInlineQuery(markup, {
         cache_time: 0,
+        switch_pm_parameter: "inline",
+        switch_pm_text: "Create a new meetup",
     });
 });
 
@@ -261,7 +271,10 @@ const editMessages = async (meetup: Meetup) => {
                     undefined,
                     undefined,
                     message.inline_message_id,
-                    generateMessageText(meetup),
+                    generateMessageText(
+                        meetup,
+                        message.chat_id === meetup.creator.id
+                    ),
                     {
                         parse_mode: "HTML",
                         ...generateSharedInlineReplyMarkup(meetup),
@@ -273,7 +286,10 @@ const editMessages = async (meetup: Meetup) => {
                     message.chat_id,
                     message.message_id,
                     undefined,
-                    generateMessageText(meetup),
+                    generateMessageText(
+                        meetup,
+                        message.chat_id === meetup.creator.id
+                    ),
                     {
                         parse_mode: "HTML",
                         ...generateCreatorReplyMarkup(meetup),
@@ -341,7 +357,7 @@ const editMessagesToMarkDeleted = async (meetup: Meetup, reason: string) => {
  * @param meetup The meetup to generate the message text for
  * @returns
  */
-const generateMessageText = (meetup: Meetup) => {
+const generateMessageText = (meetup: Meetup, admin: boolean = false) => {
     // sanitize title and descp
     // title at most 256 chars
     // description at most 1024 chars
@@ -485,6 +501,10 @@ const generateMessageText = (meetup: Meetup) => {
 
     msg += `<i>Click <a href='https://t.me/letsmeetupbot/meetup'>here</a> to create your own meetup!</i>\n\n`;
 
+    if (admin) {
+        msg += `<i>For a sharable link, click <a href='https://t.me/letsmeetupbot/meetup?startapp=indicate__${meetup.id}'>here</a></i>\n\n`;
+    }
+
     let footer = `Created on ${format(
         (meetup.date_created as unknown as Timestamp).toDate(),
         "dd MMM yyyy h:mm aaa"
@@ -505,28 +525,34 @@ const generateMessageText = (meetup: Meetup) => {
 
 const generateSharedInlineReplyMarkup = (meetup: Meetup) => {
     const res = [
-        {
-            text: "View meetup details",
-            url: `${BASE_URL}meetup/${meetup.id}`,
-        },
+        [
+            {
+                text: "View meetup details",
+                url: `${BASE_URL}meetup/${meetup.id}`,
+            },
+        ],
     ];
     if (!meetup.isEnded) {
-        res.push({
-            text: "Indicate availability",
+        res[0].push({
+            text: "Indicate availability (macOS)",
             url: `https://t.me/${process.env.BOT_USERNAME}?start=indicate__${meetup.id}`,
         });
+        res.push([
+            {
+                text: "Indicate availability",
+                url: `https://t.me/letsmeetupbot/meetup?startapp=indicate__${meetup.id}&startApp=indicate__${meetup.id}`,
+            },
+        ]);
     }
     return {
         reply_markup: {
-            inline_keyboard: [
-                res,
-                // [
-                //     {
-                //         text: "test button",
-                //         url: `https://t.me/letsmeetupbot/meetup?startapp=indicate__${meetup.id}`,
-                //     },
-                // ],
-            ],
+            inline_keyboard: res,
+            // [
+            //     {
+            //         text: "test button",
+            //         url: `https://t.me/letsmeetupbot/meetup?startapp=indicate__${meetup.id}`,
+            //     },
+            // ],
         },
     };
 };
