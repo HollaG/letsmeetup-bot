@@ -499,13 +499,17 @@ const generateMessageText = (meetup: Meetup, admin: boolean = false) => {
     // msg += `<a href='https://t.me/letsmeetupbot/meetup'>Meetup link </a>\n\n`;
     // msg += `https://t.me/letsmeetupbot/meetup?startapp=indicate__${meetup.id}\n\n`;`
 
-    msg += `<i>Click <a href='https://t.me/letsmeetupbot/meetup'>here</a> to create your own meetup!</i>\n\n`;
+    let footer = ``;
+
+    footer += `<i>Click <a href='https://t.me/letsmeetupbot/meetup'>here</a> to create your own meetup!</i>\n\n`;
 
     if (admin) {
-        msg += `<i>For a sharable link, click <a href='https://t.me/letsmeetupbot/meetup?startapp=indicate__${meetup.id}'>here</a></i>\n\n`;
+        footer += `<i>For a sharable link, click <a href='https://t.me/letsmeetupbot/meetup?startapp=indicate__${meetup.id}'>here</a></i>\n\n`;
     }
 
-    let footer = `Created on ${format(
+    footer += `<i>❗️ This bot uses new Telegram features. If the 'Indicate Availability' button doesn't work, please click <a href='t.me/letsmeetupbot?start=indicate__${meetup.id}'>here</a></i>\n\n`;
+
+    footer += `Created on ${format(
         (meetup.date_created as unknown as Timestamp).toDate(),
         "dd MMM yyyy h:mm aaa"
     )} by <a href='t.me/${meetup.creator.username}'>${
@@ -533,16 +537,14 @@ const generateSharedInlineReplyMarkup = (meetup: Meetup) => {
         ],
     ];
     if (!meetup.isEnded) {
+        // res[0].push({
+        //     text: "Indicate availability (macOS)",
+        //     url: `https://t.me/${process.env.BOT_USERNAME}?start=indicate__${meetup.id}`,
+        // });
         res[0].push({
-            text: "Indicate availability (macOS)",
-            url: `https://t.me/${process.env.BOT_USERNAME}?start=indicate__${meetup.id}`,
+            text: "Indicate availability",
+            url: `https://t.me/letsmeetupbot/meetup?startapp=indicate__${meetup.id}&startApp=indicate__${meetup.id}`,
         });
-        res.push([
-            {
-                text: "Indicate availability",
-                url: `https://t.me/letsmeetupbot/meetup?startapp=indicate__${meetup.id}&startApp=indicate__${meetup.id}`,
-            },
-        ]);
     }
     return {
         reply_markup: {
