@@ -26,6 +26,8 @@ export type Meetup = {
         [dateOrTimeStr: string]: ITelegramUser[];
     };
     isEnded: boolean;
+    creatorInfoMessageId: number;
+    notificationThreshold: number;
 };
 
 // types.ts

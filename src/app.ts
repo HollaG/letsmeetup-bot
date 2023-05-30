@@ -65,7 +65,7 @@ const listener = onSnapshot(collection(db, COLLECTION_NAME), {
             meetup.id = change.doc.id;
             if (change.type === "added") {
                 // console.log("New: ", change.doc.data());
-                if (!meetup.notified) {
+                if (meetup.creatorInfoMessageId === 0) {
                     bot.telegram
                         .sendMessage(
                             meetup.creator.id,
@@ -77,8 +77,6 @@ const listener = onSnapshot(collection(db, COLLECTION_NAME), {
                         )
                         .then((msg) => {
                             const msgId = msg.message_id;
-                            // console.log(change.doc.id, "---------");
-                            // set notified to true
                             updateDoc(
                                 doc(
                                     collection(db, COLLECTION_NAME),
@@ -86,13 +84,14 @@ const listener = onSnapshot(collection(db, COLLECTION_NAME), {
                                 ),
                                 {
                                     ...meetup,
-                                    notified: true,
+
                                     messages: [
                                         {
                                             chat_id: msg.chat.id,
                                             message_id: msgId,
                                         },
                                     ],
+                                    creatorInfoMessageId: msgId,
                                 } as Meetup
                             );
                             bot.telegram.pinChatMessage(msg.chat.id, msgId);
@@ -104,6 +103,21 @@ const listener = onSnapshot(collection(db, COLLECTION_NAME), {
                 const meetup = change.doc.data() as Meetup;
                 meetup.id = change.doc.id;
                 editMessages(meetup);
+
+                // Notification service
+                if (
+                    !meetup.notified &&
+                    meetup.users.length >= meetup.notificationThreshold
+                ) {
+                    notifyCreator(meetup);
+                    updateDoc(
+                        doc(collection(db, COLLECTION_NAME), change.doc.id),
+                        {
+                            ...meetup,
+                            notified: true,
+                        } as Meetup
+                    );
+                }
             }
             if (change.type === "removed") {
                 console.log("Removed: ", change.doc.data());
@@ -495,19 +509,19 @@ const generateMessageText = (meetup: Meetup, admin: boolean = false) => {
         }
     }
 
-    // msg += `https://t.me/letsmeetupbot/meetup\n\n`;
-    // msg += `<a href='https://t.me/letsmeetupbot/meetup'>Meetup link </a>\n\n`;
-    // msg += `https://t.me/letsmeetupbot/meetup?startapp=indicate__${meetup.id}\n\n`;`
+    // msg += `https://t.me/${process.env.BOT_USERNAME}/meetup\n\n`;
+    // msg += `<a href='https://t.me/${process.env.BOT_USERNAME}/meetup'>Meetup link </a>\n\n`;
+    // msg += `https://t.me/${process.env.BOT_USERNAME}/meetup?startapp=indicate__${meetup.id}\n\n`;`
 
     let footer = ``;
 
-    footer += `<i>Click <a href='https://t.me/letsmeetupbot/meetup'>here</a> to create your own meetup!</i>\n\n`;
+    footer += `<i>Click <a href='https://t.me/${process.env.BOT_USERNAME}/meetup'>here</a> to create your own meetup!</i>\n\n`;
 
     if (admin) {
-        footer += `<i>For a sharable link, click <a href='https://t.me/letsmeetupbot/meetup?startapp=indicate__${meetup.id}'>here</a></i>\n\n`;
+        footer += `<i>For a sharable link, click <a href='https://t.me/${process.env.BOT_USERNAME}/meetup?startapp=indicate__${meetup.id}'>here</a></i>\n\n`;
     }
 
-    footer += `<i>❗️ This bot uses new Telegram features. If the 'Indicate Availability' button doesn't work, please click <a href='t.me/letsmeetupbot?start=indicate__${meetup.id}'>here</a></i>\n\n`;
+    footer += `<i>❗️ This bot uses new Telegram features. If the 'Indicate Availability' button doesn't work, please click <a href='t.me/${process.env.BOT_USERNAME}?start=indicate__${meetup.id}'>here</a></i>\n\n`;
 
     footer += `Created on ${format(
         (meetup.date_created as unknown as Timestamp).toDate(),
@@ -543,7 +557,7 @@ const generateSharedInlineReplyMarkup = (meetup: Meetup) => {
         // });
         res[0].push({
             text: "Indicate availability",
-            url: `https://t.me/letsmeetupbot/meetup?startapp=indicate__${meetup.id}&startApp=indicate__${meetup.id}`,
+            url: `https://t.me/${process.env.BOT_USERNAME}/meetup?startapp=indicate__${meetup.id}&startApp=indicate__${meetup.id}`,
         });
     }
     return {
@@ -552,7 +566,7 @@ const generateSharedInlineReplyMarkup = (meetup: Meetup) => {
             // [
             //     {
             //         text: "test button",
-            //         url: `https://t.me/letsmeetupbot/meetup?startapp=indicate__${meetup.id}`,
+            //         url: `https://t.me/${process.env.BOT_USERNAME}/meetup?startapp=indicate__${meetup.id}`,
             //     },
             // ],
         },
@@ -598,6 +612,23 @@ const generateCreatorReplyMarkup = (meetup: Meetup) => {
             ],
         },
     };
+};
+
+/**
+ * Notify the creator when the number of people who responded has hit the threshold
+ *
+ * @param meetup The meetup that got updated
+ */
+const notifyCreator = (meetup: Meetup) => {
+    const creatorId = meetup.creator.id;
+    const msgId = meetup.creatorInfoMessageId;
+
+    const msg = `❗️ Your meetup <b><u><a href='${BASE_URL}meetup/${meetup.id}'>${meetup.title}</a></u></b> has reached ${meetup.notificationThreshold} responses!`;
+
+    // send message to creator
+    bot.telegram.sendMessage(creatorId, msg, {
+        parse_mode: "HTML",
+    });
 };
 
 const cleanup = async () => {
