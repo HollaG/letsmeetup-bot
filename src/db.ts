@@ -13,11 +13,12 @@ import {
 } from "firebase/firestore";
 import { ITelegramUser } from "./types";
 
+import dotenv from "dotenv";
 /**
  * https://firebase.google.com/docs/firestore/query-data/listen#listen_to_multiple_documents_in_a_collection
  * https://stackoverflow.com/questions/48606611/firestore-listen-to-update-on-the-entire-collection
  */
-
+dotenv.config();
 // config value from add firebase sdk script that showed earlier.
 const config = {
     apiKey: process.env.FIREBASE_API_KEY,
@@ -34,7 +35,8 @@ const fire = initializeApp(config);
 
 const db = getFirestore(fire);
 // collection name
-const COLLECTION_NAME = process.env.COLLECTION_NAME || "meetups_dev";
+
+const COLLECTION_NAME = process.env.COLLECTION_NAME || "meetups";
 console.log(COLLECTION_NAME);
 
 export { db, COLLECTION_NAME };
