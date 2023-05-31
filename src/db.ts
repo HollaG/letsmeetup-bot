@@ -34,7 +34,8 @@ const fire = initializeApp(config);
 
 const db = getFirestore(fire);
 // collection name
-const COLLECTION_NAME = process.env.COLLECTION_NAME || "meetups";
+const COLLECTION_NAME = process.env.COLLECTION_NAME || "meetups_dev";
+console.log(COLLECTION_NAME);
 
 export { db, COLLECTION_NAME };
 

@@ -406,6 +406,7 @@ const generateMessageText = (meetup: Meetup, admin: boolean = false) => {
     //     msg += `<i>Type: 🕒 Part-day </i>\n\n`;
     // }
 
+    console.log(meetup);
     msg += `👥 <b>Responded: ${numResponded}${
         meetup.options.limitNumberRespondents !== Number.MAX_VALUE
             ? ` / ${meetup.options.limitNumberRespondents}`
@@ -415,7 +416,7 @@ const generateMessageText = (meetup: Meetup, admin: boolean = false) => {
     // add the advanced settings
     // if any of the advanced settings have changed, let the users know
     if (
-        meetup.options.limitNumberRespondents !== Number.MAX_VALUE ||
+        // meetup.options.limitNumberRespondents !== Number.MAX_VALUE ||
         meetup.options.limitPerSlot !== Number.MAX_VALUE ||
         meetup.options.limitSlotsPerRespondent !== Number.MAX_VALUE ||
         (admin && meetup.options.notificationThreshold !== Number.MAX_VALUE)
@@ -555,22 +556,25 @@ const generateMessageText = (meetup: Meetup, admin: boolean = false) => {
 
     let footer = ``;
 
-    footer += `<i>Click <a href='https://t.me/${process.env.BOT_USERNAME}/meetup'>here</a> to create your own meetup!</i>\n\n`;
+    // footer += `<i>Click <a href='https://t.me/${process.env.BOT_USERNAME}/meetup'>here</a> to create your own meetup!</i>\n\n`;
 
     if (admin) {
-        footer += `<i>For a sharable link, copy <a href='https://t.me/${process.env.BOT_USERNAME}/meetup?startapp=indicate__${meetup.id}'>this link</a></i>\n\n`;
+        footer += `<i>🔗 For a sharable link, copy <a href='https://t.me/${process.env.BOT_USERNAME}/meetup?startapp=indicate__${meetup.id}'>this link</a></i>\n\n`;
     }
 
-    footer += `<i>ℹ️ This bot uses new Telegram features. If the 'Indicate Availability' button doesn't work, please click <a href='t.me/${process.env.BOT_USERNAME}?start=indicate__${meetup.id}'>here</a></i>\n\n`;
+    footer += `<i><a href='${BASE_URL}meetup/${meetup.id}'>🌐 View this meetup in your browser (view-only)</a></i>\n\n`;
+
+    footer += `<i><a href='t.me/${process.env.BOT_USERNAME}?start=indicate__${meetup.id}'>ℹ️ Click here if the Indicate button does not work.</a></i>\n\n`;
 
     // to account for the server having an incorrect timestamp
     // this won't work if the user is not in GMT+8. Server is in UTC0
-    footer += `Created on ${format(
-        addHours((meetup.date_created as unknown as Timestamp).toDate(), 8),
-        "dd MMM yyyy h:mm aaa"
-    )} by <a href='t.me/${meetup.creator.username}'>${
-        meetup.creator.first_name
-    }</a>\n`;
+    if (admin)
+        footer += `Created on ${format(
+            addHours((meetup.date_created as unknown as Timestamp).toDate(), 8),
+            "dd MMM yyyy h:mm aaa"
+        )} by <a href='t.me/${meetup.creator.username}'>${
+            meetup.creator.first_name
+        }</a>\n`;
 
     msg += footer;
     if (msg.length > 3000) {
@@ -584,12 +588,12 @@ const generateMessageText = (meetup: Meetup, admin: boolean = false) => {
 };
 
 const generateSharedInlineReplyMarkup = (meetup: Meetup) => {
-    const res = [
+    const res: any[] = [
         [
-            {
-                text: "View meetup details",
-                url: `${BASE_URL}meetup/${meetup.id}`,
-            },
+            // {
+            //     text: "View meetup details",
+            //     url: `${BASE_URL}meetup/${meetup.id}`,
+            // },
         ],
     ];
     if (!meetup.isEnded) {
@@ -598,8 +602,13 @@ const generateSharedInlineReplyMarkup = (meetup: Meetup) => {
         //     url: `https://t.me/${process.env.BOT_USERNAME}?start=indicate__${meetup.id}`,
         // });
         res[0].push({
-            text: "Indicate availability",
+            text: "Indicate your availability",
             url: `https://t.me/${process.env.BOT_USERNAME}/meetup?startapp=indicate__${meetup.id}&startApp=indicate__${meetup.id}`,
+        });
+    } else {
+        res[0].push({
+            text: "View meetup details",
+            url: `${BASE_URL}meetup/${meetup.id}`,
         });
     }
     return {
