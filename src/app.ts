@@ -107,7 +107,7 @@ const listener = onSnapshot(collection(db, COLLECTION_NAME), {
                 // Notification service
                 if (
                     !meetup.notified &&
-                    meetup.users.length >= meetup.notificationThreshold
+                    meetup.users.length >= meetup.options.notificationThreshold
                 ) {
                     notifyCreator(meetup);
                     updateDoc(
@@ -623,7 +623,7 @@ const notifyCreator = (meetup: Meetup) => {
     const creatorId = meetup.creator.id;
     const msgId = meetup.creatorInfoMessageId;
 
-    const msg = `❗️ Your meetup <b><u><a href='${BASE_URL}meetup/${meetup.id}'>${meetup.title}</a></u></b> has reached ${meetup.notificationThreshold} responses!`;
+    const msg = `❗️ Your meetup <b><u><a href='${BASE_URL}meetup/${meetup.id}'>${meetup.title}</a></u></b> has reached ${meetup.options.notificationThreshold} responses!`;
 
     // send message to creator
     bot.telegram.sendMessage(creatorId, msg, {
