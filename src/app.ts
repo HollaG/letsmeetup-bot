@@ -18,7 +18,14 @@ import {
     deleteDoc,
 } from "firebase/firestore";
 import { ITelegramUser, Meetup } from "./types";
-import { addMonths, format, isAfter, isBefore, subMonths } from "date-fns";
+import {
+    addHours,
+    addMonths,
+    format,
+    isAfter,
+    isBefore,
+    subMonths,
+} from "date-fns";
 import {
     convertTimeIntoAMPM,
     dateParser,
@@ -99,7 +106,7 @@ const listener = onSnapshot(collection(db, COLLECTION_NAME), {
                 }
             }
             if (change.type === "modified") {
-                // console.log("Modified: ", change.doc.data());
+                console.log("Modified: ", change.doc.data());
                 const meetup = change.doc.data() as Meetup;
                 meetup.id = change.doc.id;
                 editMessages(meetup);
@@ -393,16 +400,49 @@ const generateMessageText = (meetup: Meetup, admin: boolean = false) => {
 
     const numResponded = meetup.users.length;
 
-    if (meetup.isFullDay) {
-        msg += `<i>Type: 📅 Full day </i>\n\n`;
-    } else {
-        msg += `<i>Type: 🕒 Part-day </i>\n\n`;
+    // if (meetup.isFullDay) {
+    //     msg += `<i>Type: 📅 Full day </i>\n\n`;
+    // } else {
+    //     msg += `<i>Type: 🕒 Part-day </i>\n\n`;
+    // }
+
+    msg += `👥 <b>Responded: ${numResponded}${
+        meetup.options.limitNumberRespondents !== Number.MAX_VALUE
+            ? ` / ${meetup.options.limitNumberRespondents}`
+            : ""
+    }</b>\n\n`;
+
+    // add the advanced settings
+    // if any of the advanced settings have changed, let the users know
+    if (
+        meetup.options.limitNumberRespondents !== Number.MAX_VALUE ||
+        meetup.options.limitPerSlot !== Number.MAX_VALUE ||
+        meetup.options.limitSlotsPerRespondent !== Number.MAX_VALUE ||
+        (admin && meetup.options.notificationThreshold !== Number.MAX_VALUE)
+    ) {
+        msg += `<b>⚙️ Advanced settings</b>\n`;
+
+        // if (meetup.options.limitNumberRespondents !== Number.MAX_VALUE) {
+        //     msg += `Max. # of respondents: ${meetup.options.limitNumberRespondents}\n`;
+        // }
+        if (meetup.options.limitPerSlot !== Number.MAX_VALUE) {
+            msg += `Max. # of respondents / slot: ${meetup.options.limitPerSlot}\n`;
+        }
+        // Not in use for now
+        // if (meetup.options.limitSlotsPerRespondent !== Number.MAX_VALUE) {
+        //     msg += `Maximum number of slots per respondent: ${meetup.options.limitSlotsPerRespondent}\n`;
+        // }
+
+        if (
+            admin &&
+            meetup.options.notificationThreshold !== Number.MAX_VALUE
+        ) {
+            msg += `Notification threshold: ${meetup.options.notificationThreshold}\n`;
+        }
+        msg += "\n";
     }
 
-    msg += `Responded: ${numResponded}\n\n`;
-
     let defaultMsg = msg;
-
     if (meetup.isFullDay) {
         const dates = Object.keys(meetup.selectionMap).sort();
         for (let date of dates) {
@@ -518,13 +558,15 @@ const generateMessageText = (meetup: Meetup, admin: boolean = false) => {
     footer += `<i>Click <a href='https://t.me/${process.env.BOT_USERNAME}/meetup'>here</a> to create your own meetup!</i>\n\n`;
 
     if (admin) {
-        footer += `<i>For a sharable link, click <a href='https://t.me/${process.env.BOT_USERNAME}/meetup?startapp=indicate__${meetup.id}'>here</a></i>\n\n`;
+        footer += `<i>For a sharable link, copy <a href='https://t.me/${process.env.BOT_USERNAME}/meetup?startapp=indicate__${meetup.id}'>this link</a></i>\n\n`;
     }
 
-    footer += `<i>❗️ This bot uses new Telegram features. If the 'Indicate Availability' button doesn't work, please click <a href='t.me/${process.env.BOT_USERNAME}?start=indicate__${meetup.id}'>here</a></i>\n\n`;
+    footer += `<i>ℹ️ This bot uses new Telegram features. If the 'Indicate Availability' button doesn't work, please click <a href='t.me/${process.env.BOT_USERNAME}?start=indicate__${meetup.id}'>here</a></i>\n\n`;
 
+    // to account for the server having an incorrect timestamp
+    // this won't work if the user is not in GMT+8. Server is in UTC0
     footer += `Created on ${format(
-        (meetup.date_created as unknown as Timestamp).toDate(),
+        addHours((meetup.date_created as unknown as Timestamp).toDate(), 8),
         "dd MMM yyyy h:mm aaa"
     )} by <a href='t.me/${meetup.creator.username}'>${
         meetup.creator.first_name
@@ -604,6 +646,12 @@ const generateCreatorReplyMarkup = (meetup: Meetup) => {
                     },
                 ],
                 [
+                    {
+                        text: "Edit meetup",
+                        web_app: {
+                            url: `${BASE_URL}meetup/${meetup.id}/edit`,
+                        },
+                    },
                     {
                         text: "End meetup",
                         callback_data: `end__${meetup.id}`,
