@@ -36,7 +36,9 @@ export type Meetup = {
 };
 
 // types.ts
-export type ITelegramUser = User;
+export interface ITelegramUser extends User {
+    type: "telegram";
+}
 export interface IWebApp {
     initData: string;
     initDataUnsafe: {

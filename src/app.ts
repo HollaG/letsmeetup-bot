@@ -70,6 +70,11 @@ const listener = onSnapshot(collection(db, COLLECTION_NAME), {
             // then set notified = true
             const meetup = change.doc.data() as Meetup;
             meetup.id = change.doc.id;
+
+            // don't do anything if the meetup is not created through telegram
+            if (meetup.creator.type !== "telegram") {
+                return;
+            }
             if (change.type === "added") {
                 // console.log("New: ", change.doc.data());
                 if (meetup.creatorInfoMessageId === 0) {
@@ -198,7 +203,7 @@ bot.on("inline_query", async (ctx) => {
     const userMeetupsRef = collection(db, COLLECTION_NAME);
     const q = query(
         userMeetupsRef,
-        where("creator.id", "==", ctx.from.id),
+        where("creator.id", "==", ctx.from.id.toString()), // NOTE: this is a string
         orderBy("date_created", "desc")
     );
     const querySnapshot = await getDocs(q);
@@ -453,9 +458,14 @@ const generateMessageText = (meetup: Meetup, admin: boolean = false) => {
             msg += `${generateProgressBar(percent)}\n`;
             for (let i in people) {
                 const person = people[i];
-                msg += `${Number(i) + 1}. <a href="t.me/${person.username}">${
-                    person.first_name
-                }</a>\n`; // TODO: change this to first_name
+
+                if (person.type === "telegram") {
+                    msg += `${Number(i) + 1}. <a href="t.me/${
+                        person.username
+                    }">${person.first_name}</a>\n`; // TODO: change this to first_name
+                } else {
+                    msg += `${Number(i) + 1}.${person.first_name}\n`;
+                }
             }
             msg += "\n";
         }
@@ -522,9 +532,13 @@ const generateMessageText = (meetup: Meetup, admin: boolean = false) => {
 
                     for (let i in newMap[date][dateTimeStr]) {
                         const person = newMap[date][dateTimeStr][i];
-                        msg += `${Number(i) + 1}. <a href="t.me/${
-                            person.username
-                        }">${person.first_name}</a>\n`; // TODO: change this to first_name
+                        if (person.type === "telegram") {
+                            msg += `${Number(i) + 1}. <a href="t.me/${
+                                person.username
+                            }">${person.first_name}</a>\n`; // TODO: change this to first_name
+                        } else {
+                            msg += `${Number(i) + 1}.${person.first_name}\n`;
+                        }
                     }
                     msg += "\n";
                 }

@@ -14,6 +14,7 @@ import {
 import { ITelegramUser } from "./types";
 
 import dotenv from "dotenv";
+import { User } from "telegraf/typings/core/types/typegram";
 /**
  * https://firebase.google.com/docs/firestore/query-data/listen#listen_to_multiple_documents_in_a_collection
  * https://stackoverflow.com/questions/48606611/firestore-listen-to-update-on-the-entire-collection
@@ -46,11 +47,16 @@ export { db, COLLECTION_NAME };
  */
 
 export const createUserIfNotExists = async (
-    user: ITelegramUser
+    user: User
 ): Promise<ITelegramUser> | never => {
     const dbRef = doc(db, "users", user.id.toString());
+    const appUser: ITelegramUser = {
+        ...user,
+        type: "telegram",
+    };
+
     try {
-        const docRef = await setDoc(dbRef, user);
+        const docRef = await setDoc(dbRef, appUser);
 
         return {
             ...user,
