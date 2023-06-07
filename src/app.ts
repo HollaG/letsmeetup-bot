@@ -464,7 +464,7 @@ const generateMessageText = (meetup: Meetup, admin: boolean = false) => {
                         person.username
                     }">${person.first_name}</a>\n`; // TODO: change this to first_name
                 } else {
-                    msg += `${Number(i) + 1}.${person.first_name}\n`;
+                    msg += `${Number(i) + 1}. ${person.first_name}\n`;
                 }
             }
             msg += "\n";
@@ -537,7 +537,7 @@ const generateMessageText = (meetup: Meetup, admin: boolean = false) => {
                                 person.username
                             }">${person.first_name}</a>\n`; // TODO: change this to first_name
                         } else {
-                            msg += `${Number(i) + 1}.${person.first_name}\n`;
+                            msg += `${Number(i) + 1}. ${person.first_name}\n`;
                         }
                     }
                     msg += "\n";
