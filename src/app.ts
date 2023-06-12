@@ -617,7 +617,7 @@ const generateSharedInlineReplyMarkup = (meetup: Meetup) => {
         // });
         res[0].push({
             text: "Indicate your availability",
-            url: `https://t.me/${process.env.BOT_USERNAME}/meetup?startapp=indicate__${meetup.id}&startApp=indicate__${meetup.id}`,
+            url: `https://t.me/${process.env.BOT_USERNAME}/l4t?startapp=indicate__${meetup.id}&startApp=indicate__${meetup.id}`,
         });
     } else {
         res[0].push({
