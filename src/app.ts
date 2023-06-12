@@ -576,7 +576,7 @@ const generateMessageText = (meetup: Meetup, admin: boolean = false) => {
         footer += `<i>🔗 For a sharable link, copy <a href='https://t.me/${process.env.BOT_USERNAME}/meetup?startapp=indicate__${meetup.id}'>this link</a></i>\n\n`;
     }
 
-    footer += `<i><a href='${BASE_URL}meetup/${meetup.id}'>🌐 View this meetup in your browser (view-only)</a></i>\n\n`;
+    footer += `<i><a href='${BASE_URL}meetup/${meetup.id}'>🌐 View this meetup in your browser</a></i>\n\n`;
 
     footer += `<i><a href='t.me/${process.env.BOT_USERNAME}?start=indicate__${meetup.id}'>ℹ️ Click here if the Indicate button does not work.</a></i>\n\n`;
 
