@@ -145,7 +145,7 @@ const listener = onSnapshot(collection(db, COLLECTION_NAME), {
 });
 
 bot.start(async (ctx) => {
-    createUserIfNotExists(ctx.message.from);
+    // createUserIfNotExists(ctx.message.from);
     if (ctx.startPayload.startsWith("indicate__")) {
         const meetupId = ctx.startPayload.split("__")[1];
         ctx.reply(
@@ -454,7 +454,7 @@ const generateMessageText = (meetup: Meetup, admin: boolean = false) => {
         for (let date of dates) {
             const people = meetup.selectionMap[date];
             msg += `<b>${format(dateParser(date), "EEEE, d MMMM yyyy")}</b>\n`;
-            const percent = (people.length / numResponded) * 100;
+            const percent = Math.round((people.length / numResponded) * 100);
             msg += `${generateProgressBar(percent)}\n`;
             for (let i in people) {
                 const person = people[i];
@@ -622,7 +622,7 @@ const generateSharedInlineReplyMarkup = (meetup: Meetup) => {
     } else {
         res[0].push({
             text: "View meetup details",
-            url: `${BASE_URL}meetup/${meetup.id}`,
+            url: `${BASE_URL}meetup/${meetup.id}/`,
         });
     }
     return {
@@ -664,7 +664,7 @@ const generateCreatorReplyMarkup = (meetup: Meetup) => {
                     {
                         text: "Indicate availability",
                         web_app: {
-                            url: `${BASE_URL}meetup/${meetup.id}`,
+                            url: `${BASE_URL}meetup/${meetup.id}/`,
                         },
                     },
                 ],
@@ -672,7 +672,7 @@ const generateCreatorReplyMarkup = (meetup: Meetup) => {
                     {
                         text: "Edit meetup",
                         web_app: {
-                            url: `${BASE_URL}meetup/${meetup.id}/edit`,
+                            url: `${BASE_URL}meetup/${meetup.id}/edit/`,
                         },
                     },
                     {
@@ -721,16 +721,17 @@ const cleanup = async () => {
     });
 };
 
+// TODO: disabled for now
 // clear stale data every day
-const job = new CronJob("0 0 0 * * *", async () => {
-    // clear data
-    cleanup()
-        .then(() => console.log("Clean up done!"))
-        .catch(console.log);
-});
+// const job = new CronJob("0 0 0 * * *", async () => {
+//     // clear data
+//     cleanup()
+//         .then(() => console.log("Clean up done!"))
+//         .catch(console.log);
+// });
 
-job.start();
-cleanup();
+// job.start();
+// cleanup();
 
 // Enable graceful stop
 process.once("SIGINT", () => {
