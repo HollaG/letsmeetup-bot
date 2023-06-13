@@ -17,7 +17,7 @@ import {
     orderBy,
     deleteDoc,
 } from "firebase/firestore";
-import { ITelegramUser, Meetup } from "./types";
+import { ITelegramUser, Meetup, MeetupUserDetail } from "./types";
 import {
     addHours,
     addMonths,
@@ -27,6 +27,9 @@ import {
     subMonths,
 } from "date-fns";
 import {
+    add30Minutes,
+    convertDateIntoHumanReadable,
+    convertDateTimeStrIntoHumanReadable,
     convertTimeIntoAMPM,
     dateParser,
     getDate,
@@ -108,6 +111,7 @@ const listener = onSnapshot(collection(db, COLLECTION_NAME), {
                             );
                             bot.telegram.pinChatMessage(msg.chat.id, msgId);
                         });
+                    previousMeetupMap[meetup.id] = meetup.users;
                 }
             }
             if (change.type === "modified") {
@@ -116,7 +120,7 @@ const listener = onSnapshot(collection(db, COLLECTION_NAME), {
                 meetup.id = change.doc.id;
                 editMessages(meetup);
 
-                // Notification service
+                // Notification service on reply count hit
                 if (
                     !meetup.notified &&
                     meetup.users.length >= meetup.options.notificationThreshold
@@ -130,6 +134,10 @@ const listener = onSnapshot(collection(db, COLLECTION_NAME), {
                         } as Meetup
                     );
                 }
+
+                if (meetup.options.notifyOnEveryResponse !== 0) {
+                    notifyCreatorOnChange(meetup, change.doc.id);
+                }
             }
             if (change.type === "removed") {
                 console.log("Removed: ", change.doc.data());
@@ -139,6 +147,7 @@ const listener = onSnapshot(collection(db, COLLECTION_NAME), {
                     meetup,
                     `Your meetup has been deleted!`
                 );
+                delete previousMeetupMap[meetup.id];
             }
         });
     },
@@ -702,6 +711,300 @@ const notifyCreator = (meetup: Meetup) => {
     });
 };
 
+/**
+ * Store the previous meetups so that we can compare the number of responses
+ */
+const previousMeetupMap: { [meetupId: string]: MeetupUserDetail[] } = {};
+
+/**
+ * Notify the creator based on their notification settings
+ *
+ * @param meetup The meetup that got updated
+ *
+ */
+const notifyCreatorOnChange = (meetup: Meetup, meetupId: string) => {
+    // this is a failsafe.
+    // if the bot crashed and restarted, we don't want to accidentally notify everybody.
+    // the downside of doing is is that the first response after a restart will not be notified
+    if (!previousMeetupMap[meetupId]) {
+        previousMeetupMap[meetupId] = meetup.users;
+    }
+
+    const previousMeetup = previousMeetupMap[meetupId];
+    // get the NEW responses
+    const newResponses = meetup.users.filter(
+        (u) =>
+            !previousMeetupMap[meetupId].find(
+                (u2) => u2.user.id.toString() === u.user.id.toString()
+            )
+    );
+
+    // for every user in the new responses, check to see whether they've changed their responses
+    const changes: {
+        [userId: string]: {
+            added: string[]; // dateTimeStr or dateStr
+            removed: string[];
+        };
+    } = {};
+
+    const batchedChanges: {
+        [userId: string]: {
+            added: [string, string][];
+            removed: [string, string][];
+        };
+    } = {};
+
+    meetup.users.forEach((nu) => {
+        // nu = new user, ou = old user
+        const newSelected = nu.selected;
+        const oldSelected = previousMeetup.find(
+            (ou) => ou.user.id.toString() === nu.user.id.toString()
+        )?.selected;
+
+        if (!oldSelected) {
+            // if the user is new, set everything to added
+            changes[nu.user.id.toString()] = {
+                added: newSelected,
+                removed: [],
+            };
+        } else {
+            // check what's in newSelected that isn't in oldSelected
+            const added = newSelected.filter((s) => !oldSelected?.includes(s));
+            // check what's in oldSelected that isn't in newSelected
+            const removed = oldSelected?.filter(
+                (s) => !newSelected.includes(s)
+            );
+            changes[nu.user.id.toString()] = {
+                added,
+                removed,
+            };
+        }
+    });
+
+    // convert batchedChanges
+    // only for time-based meetups
+    // [930::2023-06-21, 960::2023-06-21, 990::2023-06-21] => [[930::2023-06-21, 1020::2023-06-21]  ]
+    console.log("----------------------");
+    console.log(changes);
+    console.log("----------------------");
+    if (!meetup.isFullDay) {
+        for (const userId in changes) {
+            let added: [string, string][] = [];
+            let removed: [string, string][] = [];
+
+            if (changes[userId].added.length > 0) {
+                let i = 0;
+                let tempAdded: [string, string] = ["", ""];
+
+                // we want the loop to run at least once (for the case with 1 element)
+                do {
+                    let dateTimeStr = changes[userId].added[i];
+                    if (!tempAdded[0]) {
+                        // set the start to the first date
+                        tempAdded[0] = dateTimeStr;
+                        i++;
+                    } else if (!tempAdded[1]) {
+                        // check if we should set the end timing.
+                        // condition to set the end timing: the next timing is not consecutive
+                        const thisTiming = getTime(dateTimeStr);
+                        const nextTiming = getTime(
+                            changes[userId].added[i + 1]
+                        );
+                        if (nextTiming - thisTiming !== 30) {
+                            // not consectuive
+                            tempAdded[1] = add30Minutes(dateTimeStr); // add 30 mins to this
+                            added.push(tempAdded);
+                            tempAdded = ["", ""];
+                            i++;
+                        } else {
+                            // consectuive, continue
+                            i++;
+                        }
+                    }
+                } while (i < changes[userId].added.length - 1);
+                if (tempAdded[0] && !tempAdded[1]) {
+                    // if we have a start time but no end time, set the end time to the last time + 30 min
+                    tempAdded[1] = add30Minutes(changes[userId].added.at(-1)!); // assert: the last item always exists (array is never empty)
+                    added.push(tempAdded);
+                }
+            }
+
+            if (changes[userId].removed.length > 0) {
+                let i = 0;
+                let tempRemoved: [string, string] = ["", ""];
+
+                // we want the loop to run at least once (for the case with 1 element)
+                do {
+                    let dateTimeStr = changes[userId].removed[i];
+                    if (!tempRemoved[0]) {
+                        // set the start to the first date
+                        tempRemoved[0] = dateTimeStr;
+                        i++;
+                    } else if (!tempRemoved[1]) {
+                        // check if we should set the end timing.
+                        // condition to set the end timing: the next timing is not consecutive
+                        console.log("-------------------", dateTimeStr);
+                        const thisTiming = getTime(dateTimeStr);
+                        const nextTiming = getTime(
+                            changes[userId].removed[i + 1]
+                        );
+                        if (nextTiming - thisTiming !== 30) {
+                            // not consectuive
+                            tempRemoved[1] = add30Minutes(dateTimeStr); // add 30 mins to this
+                            removed.push(tempRemoved);
+                            tempRemoved = ["", ""];
+                            i++;
+                        } else {
+                            // consectuive, continue
+                            i++;
+                        }
+                    }
+                } while (i < changes[userId].removed.length - 1);
+                if (tempRemoved[0] && !tempRemoved[1]) {
+                    // if we have a start time but no end time, set the end time to the last time + 30 min
+                    tempRemoved[1] = add30Minutes(
+                        changes[userId].removed.at(-1)!
+                    ); // assert: the last item always exists (array is never empty)
+                    removed.push(tempRemoved);
+                }
+            }
+
+            batchedChanges[userId] = {
+                added,
+                removed,
+            };
+        }
+    }
+
+    // check to see if any users removed their indication
+    // only keep the users who removed their indication (aka not in the new users)
+    const removed = previousMeetup.filter(
+        (ou) =>
+            !meetup.users.find(
+                (nu) => nu.user.id.toString() === ou.user.id.toString()
+            )
+    );
+
+    let updateMsg = `<b><u><a href='${BASE_URL}meetup/${meetupId}'> ${meetup.title} has been updated!</a></u></b>\n\n`;
+
+    if (removed.length) {
+        updateMsg += `<b>🗑 Users who removed their indication: </b>\n`;
+        removed.forEach((ou, index) => {
+            updateMsg += `${index + 1}. <a href='https://t.me/${
+                ou.user.username
+            }'>${ou.user.first_name}</a>\n`;
+        });
+
+        updateMsg += `\n`;
+    }
+
+    if (Object.keys(batchedChanges).length || Object.keys(changes).length) {
+        updateMsg += `<b>✨ Users who changed their indications / new users: </b>\n`;
+
+        if (!meetup.isFullDay)
+            Object.keys(batchedChanges).forEach((userId, index) => {
+                const user = meetup.users.find(
+                    (u) => u.user.id.toString() === userId
+                )?.user;
+
+                if (!user) {
+                    // smth went wrong, there should be a user
+                } else {
+                    let userChanges = `<b>${index + 1}. <a href='https://t.me/${
+                        user.username
+                    }'> ${user.first_name} </a></b>\n`;
+                    if (batchedChanges[userId].added.length) {
+                        // userChanges += `<u> Added </u>\n`;
+                        batchedChanges[userId].added.forEach((s) => {
+                            userChanges += `➕ ${convertDateTimeStrIntoHumanReadable(
+                                s[0]
+                            )} — ${convertDateTimeStrIntoHumanReadable(
+                                s[1]
+                            )}\n`;
+                        });
+                        userChanges += `\n`;
+                    }
+
+                    if (batchedChanges[userId].removed.length) {
+                        // userChanges += `<u> Removed </u>\n`;
+                        batchedChanges[userId].removed.forEach((s) => {
+                            userChanges += `➖ ${convertDateTimeStrIntoHumanReadable(
+                                s[0]
+                            )} — ${convertDateTimeStrIntoHumanReadable(
+                                s[1]
+                            )}\n`;
+                        });
+                        userChanges += `\n`;
+                    }
+                    userChanges += `\n`;
+                    updateMsg += userChanges;
+                }
+            });
+        else
+            Object.keys(changes).forEach((userId, index) => {
+                const user = meetup.users.find(
+                    (u) => u.user.id.toString() === userId
+                )?.user;
+
+                if (!user) {
+                    // smth went wrong, there should be a user
+                } else {
+                    let userChanges = `<b>${index + 1}. <a href='https://t.me/${
+                        user.username
+                    }'> ${user.first_name} </a></b>\n`;
+                    if (changes[userId].added.length) {
+                        userChanges += `<u> Added </u>\n`;
+                        changes[userId].added.forEach((s) => {
+                            userChanges += `⟶ ${convertDateTimeStrIntoHumanReadable(
+                                s
+                            )}\n`;
+                        });
+                        userChanges += `\n`;
+                    }
+
+                    if (changes[userId].removed.length) {
+                        userChanges += `<u> Removed </u>\n`;
+                        changes[userId].removed.forEach((s) => {
+                            userChanges += `⟶ ${convertDateTimeStrIntoHumanReadable(
+                                s
+                            )}\n`;
+                        });
+                        userChanges += `\n`;
+                    }
+                    userChanges += `\n`;
+                    updateMsg += userChanges;
+                }
+            });
+    }
+
+    // if there was a bug and non of the fields has something, dont send anything
+    if (!removed.length && !Object.keys(changes).length) {
+        return;
+    }
+
+    // send message to creator
+    bot.telegram
+        .sendMessage(meetup.creator.id, updateMsg, {
+            reply_to_message_id: meetup.creatorInfoMessageId,
+            parse_mode: "HTML",
+            reply_markup: {
+                inline_keyboard: [
+                    [
+                        {
+                            text: "Stop receiving notifications",
+                            callback_data: `stop_notify__${meetupId}`,
+                        },
+                    ],
+                ],
+            },
+            disable_web_page_preview: true,
+        })
+        .then(() => {
+            // update the previous meetup
+            previousMeetupMap[meetupId] = meetup.users;
+        });
+};
+
 const cleanup = async () => {
     const data = query(collection(db, COLLECTION_NAME));
     const qs = await getDocs(data);
@@ -712,26 +1015,27 @@ const cleanup = async () => {
         if (
             isBefore(
                 (d.date_created as unknown as Timestamp).toDate(),
-                subMonths(new Date(), 3)
+                subMonths(new Date(), 1)
             )
         ) {
-            deleteDoc(doc.ref);
+            // deleteDoc(doc.ref);
+            delete previousMeetupMap[doc.id];
             console.log("found doc that's expired");
         }
     });
 };
 
 // TODO: disabled for now
-// clear stale data every day
-// const job = new CronJob("0 0 0 * * *", async () => {
-//     // clear data
-//     cleanup()
-//         .then(() => console.log("Clean up done!"))
-//         .catch(console.log);
-// });
+// clear notifications data every day
+const job = new CronJob("0 0 0 * * *", async () => {
+    // clear data
+    cleanup()
+        .then(() => console.log("Clean up done!"))
+        .catch(console.log);
+});
 
-// job.start();
-// cleanup();
+job.start();
+cleanup();
 
 // Enable graceful stop
 process.once("SIGINT", () => {

@@ -1,16 +1,17 @@
 import { User } from "telegraf/typings/core/types/typegram";
 
+export type MeetupUserDetail = {
+    comments: string;
+    selected: string[];
+    user: ITelegramUser;
+};
 export type Meetup = {
     id?: string;
     creator: ITelegramUser;
     isFullDay: boolean;
     timeslots: string[];
     dates: string[];
-    users: {
-        comments: string;
-        selected: string[];
-        user: ITelegramUser;
-    }[];
+    users: MeetupUserDetail[];
     date_created: Date;
     title: string;
     description?: string;
@@ -33,6 +34,7 @@ export type Meetup = {
         limitNumberRespondents: number;
         limitSlotsPerRespondent: number;
         endAt: Date;
+        notifyOnEveryResponse: 0 | 1 | 2;
     };
 };
 

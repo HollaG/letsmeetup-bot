@@ -23,6 +23,30 @@ export const dateEncoder = (date: Date) => {
 };
 
 /**
+ * Converts a date encoded string into a human-readable date.
+ *
+ * @param dateStr the date string to be converted
+ * @returns a nicely formatted string
+ */
+export const convertDateIntoHumanReadable = (dateStr: string) => {
+    const date = dateParser(dateStr);
+    return format(date, "dd MMM yyyy");
+};
+
+/**
+ * Converts a date-time encoded string into a human-readable date.
+ *
+ * @param dateTimeStr the date string to be converted
+ * @returns a nicely formatted string
+ */
+export const convertDateTimeStrIntoHumanReadable = (dateTimeStr: string) => {
+    const date = getDate(dateTimeStr);
+    const time = getTime(dateTimeStr);
+
+    return `${convertDateIntoHumanReadable(date)} ${convertTimeIntoAMPM(time)}`;
+};
+
+/**
  * Returns the date from the formatted string, if it contains the encode separator.
  *
  * @param str The string to be parsed
@@ -196,4 +220,14 @@ export const getNumberOfConsectiveSelectedTimeSlots = (
         }
     }
     return Array.from(Array(count).keys());
+};
+
+/**
+ * Adds 30 minutes to a date-time-str.
+ */
+export const add30Minutes = (dateTimeStr: string) => {
+    const [time, date] = dateTimeStr.split("::");
+    let nextTime = parseInt(time) + 30;
+    if (nextTime === 24 * 60) nextTime = nextTime - 1;
+    return `${nextTime}::${date}`;
 };
