@@ -36,6 +36,10 @@ export type Meetup = {
         endAt: Date;
         notifyOnEveryResponse: 0 | 1 | 2;
     };
+    cannotMakeIt: {
+        comments: string;
+        user: ITelegramUser;
+    }[];
 };
 
 // types.ts

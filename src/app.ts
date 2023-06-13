@@ -275,36 +275,91 @@ bot.on("chosen_inline_result", async (ctx) => {
 });
 
 bot.on("callback_query", async (ctx) => {
-    // @ts-ignore
-    const cbData = ctx.callbackQuery.data;
+    try {
+        // @ts-ignore
+        const cbData = ctx.callbackQuery.data;
+        if (!ctx.from) return;
 
-    if (cbData.startsWith("end__")) {
-        const id = cbData.replace("end__", "");
-        const docRef = doc(db, COLLECTION_NAME, id);
-        updateDoc(docRef, {
-            isEnded: true,
-        });
-        // deleteDoc(docRef);
-        ctx.answerCbQuery("Meetup ended!");
-    }
-    if (cbData.startsWith("stop_notify__")) {
-        const id = cbData.replace("stop_notify__", "");
-        const docRef = doc(db, COLLECTION_NAME, id);
-        updateDoc(docRef, {
-            "options.notifyOnEveryResponse": 0,
-        });
-        ctx.answerCbQuery("Notifications stopped!");
-        delete previousMeetupMap[id];
-    }
-    if (cbData.startsWith("start_notify__")) {
-        const id = cbData.replace("start_notify__", "");
-        const docRef = doc(db, COLLECTION_NAME, id);
-        const meetup = await getDoc(docRef);
-        updateDoc(docRef, {
-            "options.notifyOnEveryResponse": 1,
-        });
-        ctx.answerCbQuery("Notifications enabled!");
-        previousMeetupMap[id] = (meetup.data() as Meetup).users;
+        if (cbData.startsWith("end__")) {
+            const id = cbData.replace("end__", "");
+            const docRef = doc(db, COLLECTION_NAME, id);
+            updateDoc(docRef, {
+                isEnded: true,
+            });
+            // deleteDoc(docRef);
+            ctx.answerCbQuery("Meetup ended!");
+        }
+        if (cbData.startsWith("stop_notify__")) {
+            const id = cbData.replace("stop_notify__", "");
+            const docRef = doc(db, COLLECTION_NAME, id);
+            updateDoc(docRef, {
+                "options.notifyOnEveryResponse": 0,
+            });
+            ctx.answerCbQuery("Notifications stopped!");
+            delete previousMeetupMap[id];
+        }
+
+        if (cbData.startsWith("start_notify__")) {
+            const id = cbData.replace("start_notify__", "");
+            const docRef = doc(db, COLLECTION_NAME, id);
+            const meetup = await getDoc(docRef);
+            updateDoc(docRef, {
+                "options.notifyOnEveryResponse": 1,
+            });
+            ctx.answerCbQuery("Notifications enabled!");
+            previousMeetupMap[id] = (meetup.data() as Meetup).users;
+        }
+
+        if (cbData.startsWith("cannot__")) {
+            const id = cbData.replace("cannot__", "");
+            const userId = ctx.from.id.toString();
+
+            // get meetup
+            const docRef = doc(db, COLLECTION_NAME, id);
+            const meetup = (await getDoc(docRef)).data() as Meetup;
+
+            const u = meetup.users.find((u) => u.user.id.toString() === userId);
+
+            // TODO: change to structuredClone
+            const newSelectionMap: {
+                [dateOrTimeStr: string]: ITelegramUser[];
+            } = JSON.parse(JSON.stringify(meetup.selectionMap));
+
+            u?.selected.forEach((s) => {
+                newSelectionMap[s] = newSelectionMap[s].filter(
+                    (user) => user.id.toString() !== userId
+                );
+                if (newSelectionMap[s].length === 0) {
+                    delete newSelectionMap[s];
+                }
+            });
+
+            const cannotMakeIt =
+                [
+                    ...meetup.cannotMakeIt,
+                    {
+                        comments: "",
+                        user: {
+                            ...ctx.from,
+                            id: ctx.from.id.toString(),
+                            type: "telegram",
+                        },
+                    },
+                ] || [];
+
+            // remove from users
+            const newUsers = meetup.users.filter(
+                (u) => u.user.id.toString() !== userId
+            );
+
+            updateDoc(docRef, {
+                selectionMap: newSelectionMap,
+                cannotMakeIt: cannotMakeIt,
+                users: newUsers,
+            });
+        }
+    } catch (e: any) {
+        ctx.answerCbQuery(`Error: ${e.toString()}`);
     }
 });
 
@@ -593,9 +648,14 @@ const generateMessageText = (meetup: Meetup, admin: boolean = false) => {
         }
     }
 
-    // msg += `https://t.me/${process.env.BOT_USERNAME}/meetup\n\n`;
-    // msg += `<a href='https://t.me/${process.env.BOT_USERNAME}/meetup'>Meetup link </a>\n\n`;
-    // msg += `https://t.me/${process.env.BOT_USERNAME}/meetup?startapp=indicate__${meetup.id}\n\n`;`
+    if (meetup.cannotMakeIt.length) {
+        // there are people who cannot make it
+        msg += `<b><u>Cannot make it (${meetup.cannotMakeIt.length})</u></b>\n`;
+        for (let u of meetup.cannotMakeIt) {
+            msg += `<a href="t.me/${u.user.username}"><b>${u.user.first_name}</b></a>\n`;
+        }
+        msg += "\n";
+    }
 
     let footer = ``;
 
@@ -648,6 +708,12 @@ const generateSharedInlineReplyMarkup = (meetup: Meetup) => {
             text: "Indicate your availability",
             url: `https://t.me/${process.env.BOT_USERNAME}/l4t?startapp=indicate__${meetup.id}&startApp=indicate__${meetup.id}`,
         });
+        res[1] = [
+            {
+                text: "❌ I cannot make it",
+                callback_data: `cannot__${meetup.id}`,
+            },
+        ];
     } else {
         res[0].push({
             text: "View meetup details",
