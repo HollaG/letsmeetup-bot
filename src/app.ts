@@ -274,7 +274,7 @@ bot.on("chosen_inline_result", async (ctx) => {
     }
 });
 
-bot.on("callback_query", (ctx) => {
+bot.on("callback_query", async (ctx) => {
     // @ts-ignore
     const cbData = ctx.callbackQuery.data;
 
@@ -285,6 +285,26 @@ bot.on("callback_query", (ctx) => {
             isEnded: true,
         });
         // deleteDoc(docRef);
+        ctx.answerCbQuery("Meetup ended!");
+    }
+    if (cbData.startsWith("stop_notify__")) {
+        const id = cbData.replace("stop_notify__", "");
+        const docRef = doc(db, COLLECTION_NAME, id);
+        updateDoc(docRef, {
+            "options.notifyOnEveryResponse": 0,
+        });
+        ctx.answerCbQuery("Notifications stopped!");
+        delete previousMeetupMap[id];
+    }
+    if (cbData.startsWith("start_notify__")) {
+        const id = cbData.replace("start_notify__", "");
+        const docRef = doc(db, COLLECTION_NAME, id);
+        const meetup = await getDoc(docRef);
+        updateDoc(docRef, {
+            "options.notifyOnEveryResponse": 1,
+        });
+        ctx.answerCbQuery("Notifications enabled!");
+        previousMeetupMap[id] = (meetup.data() as Meetup).users;
     }
 });
 
@@ -689,6 +709,17 @@ const generateCreatorReplyMarkup = (meetup: Meetup) => {
                         callback_data: `end__${meetup.id}`,
                     },
                 ],
+                [
+                    meetup.options.notifyOnEveryResponse === 0
+                        ? {
+                              text: "🔔 Get notified on every reply",
+                              callback_data: `start_notify__${meetup.id}`,
+                          }
+                        : {
+                              text: "🔕 Stop receiving notifications",
+                              callback_data: `stop_notify__${meetup.id}`,
+                          },
+                ],
             ],
         },
     };
@@ -728,6 +759,7 @@ const notifyCreatorOnChange = (meetup: Meetup, meetupId: string) => {
     // the downside of doing is is that the first response after a restart will not be notified
     if (!previousMeetupMap[meetupId]) {
         previousMeetupMap[meetupId] = meetup.users;
+        return;
     }
 
     const previousMeetup = previousMeetupMap[meetupId];
@@ -784,9 +816,7 @@ const notifyCreatorOnChange = (meetup: Meetup, meetupId: string) => {
     // convert batchedChanges
     // only for time-based meetups
     // [930::2023-06-21, 960::2023-06-21, 990::2023-06-21] => [[930::2023-06-21, 1020::2023-06-21]  ]
-    console.log("----------------------");
-    console.log(changes);
-    console.log("----------------------");
+
     if (!meetup.isFullDay) {
         for (const userId in changes) {
             let added: [string, string][] = [];
@@ -843,7 +873,7 @@ const notifyCreatorOnChange = (meetup: Meetup, meetupId: string) => {
                     } else if (!tempRemoved[1]) {
                         // check if we should set the end timing.
                         // condition to set the end timing: the next timing is not consecutive
-                        console.log("-------------------", dateTimeStr);
+
                         const thisTiming = getTime(dateTimeStr);
                         const nextTiming = getTime(
                             changes[userId].removed[i + 1]
@@ -955,7 +985,7 @@ const notifyCreatorOnChange = (meetup: Meetup, meetupId: string) => {
                     if (changes[userId].added.length) {
                         userChanges += `<u> Added </u>\n`;
                         changes[userId].added.forEach((s) => {
-                            userChanges += `⟶ ${convertDateTimeStrIntoHumanReadable(
+                            userChanges += `⟶ ${convertDateIntoHumanReadable(
                                 s
                             )}\n`;
                         });
@@ -965,7 +995,7 @@ const notifyCreatorOnChange = (meetup: Meetup, meetupId: string) => {
                     if (changes[userId].removed.length) {
                         userChanges += `<u> Removed </u>\n`;
                         changes[userId].removed.forEach((s) => {
-                            userChanges += `⟶ ${convertDateTimeStrIntoHumanReadable(
+                            userChanges += `⟶ ${convertDateIntoHumanReadable(
                                 s
                             )}\n`;
                         });
@@ -991,7 +1021,7 @@ const notifyCreatorOnChange = (meetup: Meetup, meetupId: string) => {
                 inline_keyboard: [
                     [
                         {
-                            text: "Stop receiving notifications",
+                            text: "🔕 Stop receiving notifications",
                             callback_data: `stop_notify__${meetupId}`,
                         },
                     ],
