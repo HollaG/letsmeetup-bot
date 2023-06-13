@@ -53,13 +53,14 @@ export const createUserIfNotExists = async (
     const appUser: ITelegramUser = {
         ...user,
         type: "telegram",
+        id: user.id.toString(),
     };
 
     try {
         const docRef = await setDoc(dbRef, appUser);
 
         return {
-            ...user,
+            ...appUser,
         } as ITelegramUser;
     } catch (e) {
         console.log(e);

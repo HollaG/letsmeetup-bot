@@ -383,7 +383,7 @@ const editMessages = async (meetup: Meetup) => {
                     message.inline_message_id,
                     generateMessageText(
                         meetup,
-                        message.chat_id === meetup.creator.id
+                        message.chat_id?.toString() === meetup.creator.id
                     ),
                     {
                         parse_mode: "HTML",
@@ -398,7 +398,7 @@ const editMessages = async (meetup: Meetup) => {
                     undefined,
                     generateMessageText(
                         meetup,
-                        message.chat_id === meetup.creator.id
+                        message.chat_id?.toString() === meetup.creator.id
                     ),
                     {
                         parse_mode: "HTML",

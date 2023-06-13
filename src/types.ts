@@ -43,8 +43,9 @@ export type Meetup = {
 };
 
 // types.ts
-export interface ITelegramUser extends User {
+export interface ITelegramUser extends Omit<User, "id"> {
     type: "telegram";
+    id: string;
 }
 export interface IWebApp {
     initData: string;
