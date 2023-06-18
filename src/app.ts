@@ -126,6 +126,8 @@ const listener = onSnapshot(collection(db, COLLECTION_NAME), {
                     meetup.users.length >= meetup.options.notificationThreshold
                 ) {
                     notifyCreator(meetup);
+
+                    // note: this updateDoc triggers another onSnapshot
                     updateDoc(
                         doc(collection(db, COLLECTION_NAME), change.doc.id),
                         {
@@ -133,9 +135,9 @@ const listener = onSnapshot(collection(db, COLLECTION_NAME), {
                             notified: true,
                         } as Meetup
                     );
-                }
 
-                if (meetup.options.notifyOnEveryResponse !== 0) {
+                    // use an else if to prevent the next if from running because updateDoc will trigger
+                } else if (meetup.options.notifyOnEveryResponse !== 0) {
                     notifyCreatorOnChange(meetup, change.doc.id);
                 }
             }
