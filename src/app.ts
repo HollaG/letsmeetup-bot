@@ -203,13 +203,13 @@ bot.on("inline_query", async (ctx) => {
     const type = searchQuery.split("_")[0];
     const meetupId = searchQuery.split("_")[1];
 
-    if (searchQuery.trim().length < 2) {
-        return await ctx.answerInlineQuery([], {
-            // cache_time: 0,
-            switch_pm_parameter: "inline",
-            switch_pm_text: "Create a new meetup",
-        });
-    }
+    // if (searchQuery.trim().length < 2) {
+    //     return await ctx.answerInlineQuery([], {
+    //         // cache_time: 0,
+    //         switch_pm_parameter: "inline",
+    //         switch_pm_text: "Create a new meetup",
+    //     });
+    // }
 
     const userMeetupsRef = collection(db, COLLECTION_NAME);
     const q = query(
@@ -244,7 +244,7 @@ bot.on("inline_query", async (ctx) => {
             },
             ...generateSharedInlineReplyMarkup(doc),
         }))
-        .slice(0, 45) as InlineQueryResultArticle[];
+        .slice(0, 49) as InlineQueryResultArticle[];
 
     await ctx.answerInlineQuery(markup, {
         cache_time: 0,
