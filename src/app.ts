@@ -874,10 +874,14 @@ const notifyCreatorOnChange = (meetup: Meetup, meetupId: string) => {
             const removed = oldSelected?.filter(
                 (s) => !newSelected.includes(s)
             );
-            changes[nu.user.id.toString()] = {
-                added,
-                removed,
-            };
+
+            // only if the user actually changed something do we add
+            if (added.length > 0 || removed.length > 0) {
+                changes[nu.user.id.toString()] = {
+                    added,
+                    removed,
+                };
+            }
         }
     });
 
