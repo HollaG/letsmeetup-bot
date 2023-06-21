@@ -739,7 +739,10 @@ const generateMessageText = (meetup: Meetup, admin: boolean = false) => {
     return msg;
 };
 
-const generateBodyText = (meetup: Meetup) => {
+const generateBodyText = (_meetup: Meetup) => {
+    // copy over the meetup
+    const meetup = structuredClone(_meetup);
+
     const numResponded = meetup.users.length;
     let msg = ``;
     if (meetup.isFullDay) {
