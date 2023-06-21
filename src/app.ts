@@ -611,6 +611,22 @@ const generateMessageText = (meetup: Meetup, admin: boolean = false) => {
             : ""
     }</b>\n\n`;
 
+    // preformat: find the 'best' arrangement: what is the most number that any slot is selected?
+    let mostSelected = 0;
+    for (const dateStr in meetup.selectionMap) {
+        if (meetup.selectionMap[dateStr].length > mostSelected) {
+            mostSelected = meetup.selectionMap[dateStr].length;
+        }
+    }
+
+    msg += `<b>${
+        mostSelected / numResponded === 1
+            ? "😄"
+            : mostSelected / numResponded < 0.5
+            ? "😕"
+            : "🙂"
+    } The best availability is ${mostSelected} / ${numResponded}</b>\n\n`;
+
     // add the advanced settings
     // if any of the advanced settings have changed, let the users know
     if (
@@ -642,6 +658,90 @@ const generateMessageText = (meetup: Meetup, admin: boolean = false) => {
     }
 
     let defaultMsg = msg;
+
+    msg += generateBodyText(meetup);
+
+    const usersWithComments = meetup.users.filter((u) => u.comments.length);
+    if (usersWithComments.length) {
+        msg += `<b><u>Comments (${usersWithComments.length})</u></b>\n`;
+        // there is at least one comment
+        for (let userObj of usersWithComments) {
+            const user = userObj.user;
+
+            // max 512 chars
+            const comment = sanitizeHtml(
+                userObj.comments.trim(),
+                sanitizeOptions
+            ).slice(0, 512);
+            msg += `<a href="t.me/${user.username}"><b>${user.first_name}</b></a>\n${comment}\n\n`;
+        }
+    }
+
+    if (meetup.cannotMakeIt.length) {
+        // there are people who cannot make it
+        msg += `<b><u>Cannot make it (${meetup.cannotMakeIt.length})</u></b>\n`;
+        for (let u of meetup.cannotMakeIt) {
+            msg += `<a href="t.me/${u.user.username}"><b>${u.user.first_name}</b></a>\n`;
+        }
+        msg += "\n";
+    }
+
+    let footer = ``;
+
+    // footer += `<i>Click <a href='https://t.me/${process.env.BOT_USERNAME}/meetup'>here</a> to create your own meetup!</i>\n\n`;
+
+    if (admin) {
+        footer += `<i>🔗 For a sharable link, copy <a href='https://t.me/${process.env.BOT_USERNAME}/meetup?startapp=indicate__${meetup.id}'>this link</a></i>\n\n`;
+    }
+
+    footer += `<i><a href='${BASE_URL}meetup/${meetup.id}'>🌐 View this meetup in your browser</a></i>\n\n`;
+
+    footer += `<i><a href='t.me/${process.env.BOT_USERNAME}?start=indicate__${meetup.id}'>ℹ️ Click here if the Indicate button does not work.</a></i>\n\n`;
+
+    // to account for the server having an incorrect timestamp
+    // this won't work if the user is not in GMT+8. Server is in UTC0
+    if (admin)
+        footer += `Created on ${format(
+            addHours((meetup.date_created as unknown as Timestamp).toDate(), 8),
+            "dd MMM yyyy h:mm aaa"
+        )} by <a href='t.me/${meetup.creator.username}'>${
+            meetup.creator.first_name
+        }</a>\n`;
+
+    msg += footer;
+    if (msg.length > 4000) {
+        // only show the best slots
+
+        // delete all the slots that are not the most selected
+        for (const dateStr in meetup.selectionMap) {
+            if (meetup.selectionMap[dateStr].length < mostSelected) {
+                delete meetup.selectionMap[dateStr];
+            }
+        }
+
+        // generate the message
+        const limitedMsg = generateBodyText(meetup);
+        if (limitedMsg.length + defaultMsg.length + footer.length < 4000) {
+            return (
+                defaultMsg +
+                "❗️ Showing only the best timings! Please view the meetup details by clicking the button below.\n\n" +
+                limitedMsg +
+                footer
+            );
+        } else {
+            return (
+                defaultMsg +
+                "❗️ Please view the meetup details by clicking the button below.\n\n" +
+                footer
+            );
+        }
+    }
+    return msg;
+};
+
+const generateBodyText = (meetup: Meetup) => {
+    const numResponded = meetup.users.length;
+    let msg = ``;
     if (meetup.isFullDay) {
         const dates = Object.keys(meetup.selectionMap).sort();
         for (let date of dates) {
@@ -741,61 +841,6 @@ const generateMessageText = (meetup: Meetup, admin: boolean = false) => {
         msg += "\n";
     }
 
-    const usersWithComments = meetup.users.filter((u) => u.comments.length);
-    if (usersWithComments.length) {
-        msg += `<b><u>Comments (${usersWithComments.length})</u></b>\n`;
-        // there is at least one comment
-        for (let userObj of usersWithComments) {
-            const user = userObj.user;
-
-            // max 512 chars
-            const comment = sanitizeHtml(
-                userObj.comments.trim(),
-                sanitizeOptions
-            ).slice(0, 512);
-            msg += `<a href="t.me/${user.username}"><b>${user.first_name}</b></a>\n${comment}\n\n`;
-        }
-    }
-
-    if (meetup.cannotMakeIt.length) {
-        // there are people who cannot make it
-        msg += `<b><u>Cannot make it (${meetup.cannotMakeIt.length})</u></b>\n`;
-        for (let u of meetup.cannotMakeIt) {
-            msg += `<a href="t.me/${u.user.username}"><b>${u.user.first_name}</b></a>\n`;
-        }
-        msg += "\n";
-    }
-
-    let footer = ``;
-
-    // footer += `<i>Click <a href='https://t.me/${process.env.BOT_USERNAME}/meetup'>here</a> to create your own meetup!</i>\n\n`;
-
-    if (admin) {
-        footer += `<i>🔗 For a sharable link, copy <a href='https://t.me/${process.env.BOT_USERNAME}/meetup?startapp=indicate__${meetup.id}'>this link</a></i>\n\n`;
-    }
-
-    footer += `<i><a href='${BASE_URL}meetup/${meetup.id}'>🌐 View this meetup in your browser</a></i>\n\n`;
-
-    footer += `<i><a href='t.me/${process.env.BOT_USERNAME}?start=indicate__${meetup.id}'>ℹ️ Click here if the Indicate button does not work.</a></i>\n\n`;
-
-    // to account for the server having an incorrect timestamp
-    // this won't work if the user is not in GMT+8. Server is in UTC0
-    if (admin)
-        footer += `Created on ${format(
-            addHours((meetup.date_created as unknown as Timestamp).toDate(), 8),
-            "dd MMM yyyy h:mm aaa"
-        )} by <a href='t.me/${meetup.creator.username}'>${
-            meetup.creator.first_name
-        }</a>\n`;
-
-    msg += footer;
-    if (msg.length > 3000) {
-        return (
-            defaultMsg +
-            "❗️ Please view the meetup details by clicking the button below.\n\n" +
-            footer
-        );
-    }
     return msg;
 };
 
