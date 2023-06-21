@@ -16,6 +16,7 @@ import {
     getDocs,
     orderBy,
     deleteDoc,
+    documentId,
 } from "firebase/firestore";
 import { ITelegramUser, Meetup, MeetupUserDetail } from "./types";
 import {
@@ -194,6 +195,101 @@ bot.start(async (ctx) => {
         });
 });
 
+/**
+ * List all meetups of user
+ */
+bot.command("list", async (ctx) => {
+    try {
+        const userId = ctx.from.id.toString();
+        const q = query(
+            collection(db, COLLECTION_NAME),
+            orderBy("last_updated", "desc"),
+            where("creator.id", "==", userId)
+        );
+        let data: Array<Meetup> = [];
+
+        const querySnapshot = await getDocs(q);
+        querySnapshot.forEach((doc) => {
+            // console.log(doc.id, " => ", doc.data());
+
+            data.push({
+                id: doc.id,
+                ...doc.data(),
+            } as Meetup);
+        });
+
+        data = data.slice(0, 50);
+
+        if (data.length === 0) {
+            return ctx.reply("You haven't created any meetups!");
+        }
+
+        let message = `✨ <b><u>Here are your latest 50 meetups.</u></b>\n\n`;
+        data.forEach((meetup, i) => {
+            message += `${i + 1}. <b><a href='${BASE_URL}meetup/${meetup.id}'>${
+                meetup.title
+            }</a></b>\n`;
+        });
+
+        ctx.reply(message, {
+            parse_mode: "HTML",
+            disable_web_page_preview: true,
+        });
+    } catch (e: any) {
+        ctx.reply(`Unknown error: ${e.toString()}`);
+    }
+});
+/**
+ * List all interacted meetups
+ */
+bot.command("replies", async (ctx) => {
+    try {
+        const userId = ctx.from.id.toString();
+        const userRef = doc(db, "users", userId);
+        const userDoc = await getDoc(userRef);
+        const user = userDoc.data() as ITelegramUser;
+        const interacted = user.interacted || [];
+
+        if (!interacted.length) {
+            return ctx.reply("You have not replied to any meetups yet!");
+        }
+        const data: Array<any> = [];
+        const q = query(
+            collection(db, COLLECTION_NAME),
+            where(documentId(), "in", interacted)
+        );
+
+        const querySnapshot = await getDocs(q);
+        querySnapshot.forEach((doc) => {
+            // console.log(doc.id, " => ", doc.data());
+
+            data.push({
+                id: doc.id,
+                ...doc.data(),
+            });
+        });
+
+        // sort the data by the userIndicated arrangement
+        const sortedData = interacted
+            .map((id) => data.find((meetup) => meetup.id === id) || undefined)
+            .filter(Boolean);
+
+        let message = `✨ <b><u>Here are the latest 10 meetups that you've replied to.</u></b>\n\n`;
+        sortedData.forEach((meetup, i) => {
+            message += `${i + 1}. <b><a href='${BASE_URL}meetup/${meetup.id}'>${
+                meetup.title
+            }</a></b>\n`;
+        });
+
+        ctx.reply(message, {
+            parse_mode: "HTML",
+            disable_web_page_preview: true,
+        });
+    } catch (e: any) {
+        ctx.reply(`Unknown error: ${e.toString()}`);
+    }
+});
+
 bot.on("inline_query", async (ctx) => {
     const searchQuery = ctx.inlineQuery.query;
     let searchStr = "";
@@ -354,10 +450,21 @@ bot.on("callback_query", async (ctx) => {
                 (u) => u.user.id.toString() !== userId
             );
 
-            updateDoc(docRef, {
+            await updateDoc(docRef, {
                 selectionMap: newSelectionMap,
                 cannotMakeIt: cannotMakeIt,
                 users: newUsers,
+            });
+
+            // update the users to indicate that they've interacted with this meetup
+            const userRef = doc(db, "users", userId);
+            const userDb = (await getDoc(userRef)).data() as ITelegramUser;
+
+            const previousInteractions =
+                userDb.interacted?.filter((pId) => pId !== id) || [];
+
+            await updateDoc(userRef, {
+                interacted: [id, ...previousInteractions],
             });
         }
     } catch (e: any) {

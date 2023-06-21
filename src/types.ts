@@ -46,6 +46,7 @@ export type Meetup = {
 export interface ITelegramUser extends Omit<User, "id"> {
     type: "telegram";
     id: string;
+    interacted? : string[]
 }
 export interface IWebApp {
     initData: string;
