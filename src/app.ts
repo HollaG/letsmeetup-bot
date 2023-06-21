@@ -576,7 +576,10 @@ const editMessagesToMarkDeleted = async (meetup: Meetup, reason: string) => {
  * @param meetup The meetup to generate the message text for
  * @returns
  */
-const generateMessageText = (meetup: Meetup, admin: boolean = false) => {
+const generateMessageText = (_meetup: Meetup, admin: boolean = false) => {
+    // copy over meetup
+    const meetup = JSON.parse(JSON.stringify(_meetup)) as Meetup;
+
     // sanitize title and descp
     // title at most 256 chars
     // description at most 1024 chars
@@ -739,9 +742,8 @@ const generateMessageText = (meetup: Meetup, admin: boolean = false) => {
     return msg;
 };
 
-const generateBodyText = (_meetup: Meetup) => {
+const generateBodyText = (meetup: Meetup) => {
     // copy over the meetup
-    const meetup = JSON.parse(JSON.stringify(_meetup)) as Meetup;
 
     const numResponded = meetup.users.length;
     let msg = ``;
