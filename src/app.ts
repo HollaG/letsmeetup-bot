@@ -741,7 +741,7 @@ const generateMessageText = (meetup: Meetup, admin: boolean = false) => {
 
 const generateBodyText = (_meetup: Meetup) => {
     // copy over the meetup
-    const meetup = structuredClone(_meetup);
+    const meetup = JSON.parse(JSON.stringify(_meetup)) as Meetup;
 
     const numResponded = meetup.users.length;
     let msg = ``;
