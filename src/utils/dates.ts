@@ -1,4 +1,5 @@
 import { format, parse } from "date-fns";
+import { Timestamp } from "firebase/firestore";
 import { Meetup } from "../types";
 
 /**
@@ -149,7 +150,7 @@ export const isSameAsPreviousTimeSlot = (
     }
 
     // check if the two arrays have the same contents
-    const temp: { [key: number]: number } = {};
+    const temp: { [key: string]: number } = {};
     curSelected.forEach((user) => (temp[user.id] = 1));
     const isSame = previousSelected.every((user) => temp[user.id] === 1);
 
@@ -184,7 +185,7 @@ export const isSameAsNextTimeSlot = (dateTimeStr: string, meetup: Meetup) => {
     }
 
     // check if the two arrays have the same contents
-    const temp: { [key: number]: number } = {};
+    const temp: { [key: string]: number } = {};
     curSelected.forEach((user) => (temp[user.id] = 1));
     const isSame = nextSelected.every((user) => temp[user.id] === 1);
 
@@ -230,4 +231,19 @@ export const add30Minutes = (dateTimeStr: string) => {
     let nextTime = parseInt(time) + 30;
     if (nextTime === 24 * 60) nextTime = nextTime - 1;
     return `${nextTime}::${date}`;
+};
+
+/**
+ * Converts a Firebase "timestamp" object into a Date object.
+ */
+export const convertTimestampToDate = (timestamp: any) => {
+    if (timestamp instanceof Timestamp) {
+        return timestamp.toDate();
+    }
+    if (timestamp.seconds && timestamp.nanoseconds) {
+        return new Date(
+            timestamp.seconds * 1000 + timestamp.nanoseconds / 1000000
+        );
+    }
+    return null;
 };

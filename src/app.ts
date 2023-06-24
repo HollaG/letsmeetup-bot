@@ -32,6 +32,7 @@ import {
     convertDateIntoHumanReadable,
     convertDateTimeStrIntoHumanReadable,
     convertTimeIntoAMPM,
+    convertTimestampToDate,
     dateParser,
     getDate,
     getNumberOfConsectiveSelectedTimeSlots,
@@ -707,14 +708,14 @@ const generateMessageText = (_meetup: Meetup, admin: boolean = false) => {
     if (admin) {
         console.log(meetup.date_created);
 
-        console.log(meetup.date_created instanceof Timestamp);
-        // @ts-ignore
-        console.log(meetup.date_created.toDate());
-        // @ts-ignore
-        console.log(meetup.date_created.toDate().toString());
-        console.log(new Date(meetup.date_created));
+        console.log(convertTimestampToDate(meetup.date_created as unknown));
+
         footer += `Created on ${format(
-            addHours((meetup.date_created as unknown as Timestamp).toDate(), 8),
+            addHours(
+                convertTimestampToDate(meetup.date_created as unknown) ||
+                    new Date(),
+                8
+            ),
             "dd MMM yyyy h:mm aaa"
         )} by <a href='t.me/${meetup.creator.username}'>${
             meetup.creator.first_name
