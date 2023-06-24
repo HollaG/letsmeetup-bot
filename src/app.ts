@@ -706,10 +706,6 @@ const generateMessageText = (_meetup: Meetup, admin: boolean = false) => {
     // this won't work if the user is not in GMT+8. Server is in UTC0
 
     if (admin) {
-        console.log(meetup.date_created);
-
-        console.log(convertTimestampToDate(meetup.date_created as unknown));
-
         footer += `Created on ${format(
             addHours(
                 convertTimestampToDate(meetup.date_created as unknown) ||
@@ -1284,7 +1280,7 @@ const cleanup = async () => {
         // if the doc's date_created is more than 3 months ago, delete it
         if (
             isBefore(
-                (d.date_created as unknown as Timestamp).toDate(),
+                convertTimestampToDate(d.date_created) || new Date(),
                 subMonths(new Date(), 1)
             )
         ) {
