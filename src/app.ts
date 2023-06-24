@@ -703,8 +703,15 @@ const generateMessageText = (_meetup: Meetup, admin: boolean = false) => {
 
     // to account for the server having an incorrect timestamp
     // this won't work if the user is not in GMT+8. Server is in UTC0
+
     if (admin) {
         console.log(meetup.date_created);
+
+        console.log(meetup.date_created instanceof Timestamp);
+        // @ts-ignore
+        console.log(meetup.date_created.toDate());
+        // @ts-ignore
+        console.log(meetup.date_created.toDate().toString());
         console.log(new Date(meetup.date_created));
         footer += `Created on ${format(
             addHours((meetup.date_created as unknown as Timestamp).toDate(), 8),
